@@ -6,8 +6,8 @@ import "core:strconv"
 import "core:unicode/utf8"
 import "core:fmt"
 
-@(private="file")
-Type :: enum {
+@(private="package")
+TokenType :: enum {
     T_OPEN_BRACE,
     T_CLOSE_BRACE,
     T_OPEN_PARANTHESIS,
@@ -17,13 +17,13 @@ Type :: enum {
     T_INT_KEYWORD,
     T_VOID_KEYWORD,
     T_IDENTIFIER,
-    T_INTEGER_LITERAL,
+    T_INT_LITERAL,
 }
 
 @(private="package")
 Token :: struct {
     value: string,
-    type: Type,
+    type: TokenType,
     x: u32,
     y: u32,
 }
@@ -39,34 +39,34 @@ cleanup_tokens :: proc(tokens: ^[dynamic]Token) {
 }
 
 @(private="file")
-is_special_symbol :: proc(symbol: rune) -> (bool, Type) {
+is_special_symbol :: proc(symbol: rune) -> (bool, TokenType) {
     switch (symbol) {
         case '{':
-            return true, Type.T_OPEN_BRACE;
+            return true, TokenType.T_OPEN_BRACE;
         case '}':
-            return true, Type.T_CLOSE_BRACE;
+            return true, TokenType.T_CLOSE_BRACE;
         case '(':
-            return true, Type.T_OPEN_PARANTHESIS;
+            return true, TokenType.T_OPEN_PARANTHESIS;
         case ')':
-            return true, Type.T_CLOSE_PARANTHESIS;
+            return true, TokenType.T_CLOSE_PARANTHESIS;
         case ';':
-            return true, Type.T_SEMICOLON;
+            return true, TokenType.T_SEMICOLON;
     }
 
     return false, nil;
 }
 
 @(private="file")
-is_keyword :: proc(s: string) -> (bool, Type) {
+is_keyword :: proc(s: string) -> (bool, TokenType) {
     switch (s) {
         case "return":
-            return true, Type.T_RETURN_KEYWORD;
+            return true, TokenType.T_RETURN_KEYWORD;
         case "int":
-            return true, Type.T_INT_KEYWORD;
+            return true, TokenType.T_INT_KEYWORD;
         case "void":
-            return true, Type.T_VOID_KEYWORD;
+            return true, TokenType.T_VOID_KEYWORD;
     }
-    return false, Type.T_IDENTIFIER;
+    return false, TokenType.T_IDENTIFIER;
 }
 
 @(private="file")
@@ -91,7 +91,7 @@ check_for_int_literal :: proc(s: string, tokens: ^[dynamic]Token, x: u32, y: u32
     _, is_int := strconv.parse_int(s);
     if (is_int) {
         token: Token;
-        token.type = Type.T_INTEGER_LITERAL;
+        token.type = TokenType.T_INT_LITERAL;
         token.value = strings.clone_from(s);
         token.x = x - u32(len(s));
         token.y = y;
