@@ -76,4 +76,8 @@ log_ast :: proc(root: AstNode, x_offset: int = 0) {
     for child in root.childs {
         log_ast(child, x_offset + 4);
     }
+
+    if x_offset == 0 {
+        fmt.printfln("%s%s%s", YELLOW, "--------------------", RESET);
+    }
 }
