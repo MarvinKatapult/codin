@@ -31,6 +31,7 @@ Token :: struct {
 @(private="package")
 WHITESPACE :: "\t\n\v\f\r "
 
+@(private="package")
 cleanup_tokens :: proc(tokens: ^[dynamic]Token) {
     for token in tokens {
         delete(token.value);
@@ -101,6 +102,7 @@ check_for_int_literal :: proc(s: string, tokens: ^[dynamic]Token, x: u32, y: u32
     return false;
 }
 
+@(private="package")
 lex :: proc(filename: string) -> [dynamic]Token {
     ret: [dynamic]Token;
 
@@ -166,4 +168,3 @@ lex :: proc(filename: string) -> [dynamic]Token {
 
     return ret;
 }
-

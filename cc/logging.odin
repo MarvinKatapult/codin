@@ -2,6 +2,7 @@ package cc
 
 import "core:fmt"
 import "core:strings"
+import "core:path/filepath"
 
 @(private="package")
 RED     :: "\033[31m"
@@ -25,6 +26,7 @@ BOLD      :: "\033[1m"
 @(private="package")
 UNDERLINE :: "\033[4m"
 
+@(private="package")
 LogType :: enum {
     Error = 0,
     Debug,
@@ -48,13 +50,16 @@ log :: proc(type: LogType, msg: ..string) {
 
 }
 
+@(private="package")
 log_error_with_token :: proc(token: Token, msg: ..string) {
     str_b := strings.builder_make();
     defer strings.builder_destroy(&str_b);
-    strings.write_string(&str_b, "Token:");
+    strings.write_string(&str_b, "Token: \'");
     strings.write_string(&str_b, token.value);
-    strings.write_string(&str_b, " - ");
-    strings.write_string(&str_b, strings.join(msg, ""));
+    strings.write_string(&str_b, "\' - ");
+    content := strings.join(msg, "");
+    defer delete(content);
+    strings.write_string(&str_b, content);
     strings.write_string(&str_b, " [");
     strings.write_uint(&str_b, uint(token.y));
     strings.write_string(&str_b, ":");
@@ -63,6 +68,7 @@ log_error_with_token :: proc(token: Token, msg: ..string) {
     log(.Error, strings.to_string(str_b));
 }
 
+@(private="package")
 log_ast :: proc(root: AstNode, x_offset: int = 0) {
     if x_offset == 0 {
         log(.Proto, "Logging AST:");
