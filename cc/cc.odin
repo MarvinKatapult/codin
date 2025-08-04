@@ -13,7 +13,7 @@ compile_file :: proc(filepath: string) -> bool {
     defer cleanup_tokens(&tokens);
 
     for token in tokens {
-        log(.Debug, fmt.tprint(token));
+        log(.Proto, fmt.tprint(token));
     }
 
     log(.Proto, "Building AST for file: ", filepath);

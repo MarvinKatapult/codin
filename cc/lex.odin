@@ -102,6 +102,18 @@ check_for_int_literal :: proc(s: string, tokens: ^[dynamic]Token, x: u32, y: u32
     return false;
 }
 
+@(private="file")
+look_ahead_one :: proc(buf: string, index: int, c1: u8, c2: u8) -> bool {
+    c := buf[index];
+    return (len(buf) >= index && buf[index] == c1 && buf[index + 1] == c2);
+}
+
+@(private="file")
+look_back_one :: proc(buf: string, index: int, c1: u8, c2: u8) -> bool {
+    c := buf[index];
+    return (index > 0 && buf[index - 1] == c1 && buf[index] == c2);
+}
+
 @(private="package")
 lex :: proc(filename: string) -> [dynamic]Token {
     ret: [dynamic]Token;
@@ -121,39 +133,59 @@ lex :: proc(filename: string) -> [dynamic]Token {
     x: u32 = 1;
     y: u32 = 1;
     in_line_comment: bool = false;
+    comment: bool = false;
     for c, i in file_str {
         defer x += 1;
 
+        last_token := i == len(file_str) - 1;
+        if last_token {
+            strings.write_rune(&str_b, c);
+        }
 
-        if (in_line_comment) do continue;
-
-        buf := strings.to_string(str_b);
-
-        if (c == '/' && len(file_str) > i + 1 && file_str[i + 1] == '/') {
+        if look_ahead_one(file_str, i, '/', '/') {
             in_line_comment = true;
             continue;
         }
 
+        if look_ahead_one(file_str, i, '/', '*') {
+            comment = true;
+            continue;
+        }
+        
+        if look_back_one(file_str, i, '*', '/') {
+            comment = false;
+            continue;
+        }
+
+
+        buf := strings.trim(strings.to_string(str_b), WHITESPACE);
+
+        if (c == '\n') {
+            y += 1;
+            x = 0;
+            in_line_comment = false;
+        }
+
+        if in_line_comment || comment do continue;
+
         is_space := strings.is_space(c);
         special_symbol, type := is_special_symbol(c);
 
-        if (is_space || special_symbol) {
+        if is_space && len(buf) == 0 {
+            strings.builder_reset(&str_b);
+            continue;
+        }
+
+        parse_token := is_space || special_symbol || last_token;
+
+        if parse_token {
             // If buffer is still filled, identify string
             if check_for_int_literal(buf, &ret, x, y) do strings.builder_reset(&str_b);
             else if check_for_keyword(buf, &ret, x, y) do strings.builder_reset(&str_b);
         }
 
-        if (is_space) {
-            if (c == '\n') {
-                y += 1;
-                x = 0;
-                in_line_comment = false;
-            }
-            continue;
-        }
-
         // Is rune special symbol that is a token itself?
-        if (special_symbol) {
+        if special_symbol {
             // Append special symbol as token
             token.type = type;
             token.value = utf8.runes_to_string([]rune{c});

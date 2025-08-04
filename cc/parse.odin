@@ -112,17 +112,20 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, AstNode) {
             case 0:
                 if token.type != .T_RETURN_KEYWORD {
                     log_error_with_token(token^, "Statement has to begin with return keyword");
+                    cleanup_ast_statement(statement_t);
                     return false, node;
                 }
             case 1:
                 if token.type != .T_INT_LITERAL {
                     log_error_with_token(token^, "Token is not valid return value");
+                    cleanup_ast_statement(statement_t);
                     return false, node;
                 }
                 statement_t.ret_value = strings.clone(token.value);
             case 2:
                 if token.type != .T_SEMICOLON {
                     log_error_with_token(token^, "Statement has to end with semicolon");
+                    cleanup_ast_statement(statement_t);
                     return false, node;
                 }
                 return true, node;
