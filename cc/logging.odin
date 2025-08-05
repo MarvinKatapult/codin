@@ -78,7 +78,16 @@ log_ast :: proc(root: AstNode, x_offset: int = 0) {
         fmt.print(" ");
         i += 1;
     }
-    fmt.printfln("%s[%s]%s", YELLOW, root.type, RESET);
+    switch v in root.value {
+        case AstFunction:
+            fmt.printfln("%s[%s] %s %s %s %s", YELLOW, root.type, v.ret_type, v.identifier, v.params, RESET);
+        case AstStatement:
+            fmt.printfln("%s[%s] %s", YELLOW, root.type, RESET);
+        case AstExpression:
+            fmt.printfln("%s[%s] %s %s", YELLOW, root.type, v.value, RESET);
+        case:
+            fmt.printfln("%s[%s]%s", YELLOW, root.type, RESET);
+    }
     for child in root.childs {
         log_ast(child, x_offset + 4);
     }

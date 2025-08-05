@@ -1,6 +1,7 @@
 package cc
 
 import "core:fmt"
+import "core:os"
 
 compile_file :: proc(filepath: string) -> bool {
     log(.Proto, "Compiling file: ", filepath);
@@ -24,6 +25,18 @@ compile_file :: proc(filepath: string) -> bool {
         log(.Error, "Building AST was not successful");
         return false;
     }
+
+    assembler := generate_asm(ast);
+    if assembler == "" {
+        log(.Error, "Generating Assembly was not successful");
+        return false;
+    }
+    defer delete(assembler);
+
+    log(.Proto, "Writing Assembly to a.fasm!");
+    os.write_entire_file("a.fasm", transmute([]u8)assembler);
+
+    log(.Proto, assembler);
 
     return true;
 }

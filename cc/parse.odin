@@ -10,13 +10,15 @@ NodeType :: enum {
     AST_FUNCTION,
     AST_RETURN,
     AST_CONSTANT,
-    AST_STATEMENT,
+    AST_RETURN_STATEMENT,
+    AST_EXPRESSION,
 }
 
 @(private="package")
 AstValue :: union {
     AstFunction,
     AstStatement,
+    AstExpression,
 }
 
 @(private="package")
@@ -28,7 +30,7 @@ AstNode :: struct {
 
 @(private="package")
 AstFunction :: struct {
-    return_type: AstDataType,
+    ret_type: AstDataType,
     identifier: string,
     params: string,
 }
@@ -41,7 +43,11 @@ AstDataType :: enum {
 
 @(private="package")
 AstStatement :: struct {
-    ret_value: string,
+}
+
+@(private="package")
+AstExpression :: struct {
+    value: string,
 }
 
 @(private="file")
@@ -69,7 +75,12 @@ cleanup_ast_function :: proc(function_t: AstFunction) {
 @(private="package")
 cleanup_ast_statement :: proc(statement_t: AstStatement) {
     log(.Debug, "Cleaning AstStatement")
-    delete(statement_t.ret_value);
+}
+
+@(private="package")
+cleanup_ast_expression :: proc(expression_t: AstExpression) {
+    log(.Debug, "Cleaning AstExpression")
+    delete(expression_t.value);
 }
 
 @(private="package")
@@ -83,14 +94,49 @@ cleanup_ast_node :: proc(root: ^AstNode) {
             cleanup_ast_function(v);
         case AstStatement:
             cleanup_ast_statement(v);
+        case AstExpression:
+            cleanup_ast_expression(v);
     }
     if (root.childs != nil) do delete(root.childs);
 }
 
 @(private="package")
+resolve_expression :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, AstNode) {
+    node: AstNode;
+    node.type = .AST_EXPRESSION;
+    expression_t: AstExpression;
+
+    token: ^Token;
+    for i := 0; ; i += 1 {
+        node.value = expression_t;
+        
+        if i != 0 do token = next_token(iter);
+        else do token = &iter.tokens[iter.i];
+
+        if token == nil {
+            log(.Error, "Ran out of tokens whilst resolving expression: Aborting");
+            return false, node;
+        }
+
+        switch i {
+            case 0:
+                if token.type != .T_INT_LITERAL {
+                    log_error_with_token(token^, "is not a valid return value!");
+                    cleanup_ast_expression(expression_t);
+                    return false, node;
+                }
+                
+                expression_t.value = strings.clone(token.value);
+                node.value = expression_t;
+                return true, node;
+        }
+    }
+    return false, node;
+}
+
+@(private="package")
 resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, AstNode) {
     node: AstNode;
-    node.type = .AST_STATEMENT;
     statement_t: AstStatement;
 
     token: ^Token;
@@ -115,19 +161,23 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, AstNode) {
                     cleanup_ast_statement(statement_t);
                     return false, node;
                 }
+                node.type = .AST_RETURN_STATEMENT;
             case 1:
-                if token.type != .T_INT_LITERAL {
-                    log_error_with_token(token^, "Token is not valid return value");
+                ok, node_expression := resolve_expression(root, iter)
+                if !ok {
                     cleanup_ast_statement(statement_t);
                     return false, node;
                 }
-                statement_t.ret_value = strings.clone(token.value);
-            case 2:
+                append(&node.childs, node_expression);
+
+                next_token(iter);
+                token = &iter.tokens[iter.i];
                 if token.type != .T_SEMICOLON {
-                    log_error_with_token(token^, "Statement has to end with semicolon");
+                    log_error_with_token(token^, "Statement has to end with ;");
                     cleanup_ast_statement(statement_t);
                     return false, node;
                 }
+                
                 return true, node;
         }
     }
@@ -165,7 +215,7 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, AstNode) {
                     log_error_with_token(token^, "Token is not a valid return type");
                     return false, node;
                 }
-                function_t.return_type = .Int;
+                function_t.ret_type = .Int;
 
             case 1:
                 if token.type != .T_IDENTIFIER {
@@ -180,10 +230,10 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, AstNode) {
                 }
             case 3:
                 if token.type != .T_VOID_KEYWORD {
-                    function_t.params = token.value;
                     log_error_with_token(token^, "Function parameters have to be void for now" );
                     return false, node;
                 }
+                function_t.params = strings.clone(token.value);
             case 4:
                 if token.type != .T_CLOSE_PARANTHESIS {
                     log_error_with_token(token^, "Expected \')\' after function parameter");

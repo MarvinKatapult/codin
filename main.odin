@@ -3,7 +3,7 @@ package main
 import "cc"
 
 main :: proc() {
-    cc.compile_file("tests/parse/no_semicolon.c")
+    cc.compile_file("tests/test.c")
     /*
         no_semicolon.c
         not_expression.c
