@@ -153,7 +153,6 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, AstNode) {
 
         buf: [8]u8;
         strconv.itoa(buf[:], i)
-        log(.Debug, "i in resolve_statement = ", string(buf[:]));
         switch i {
             case 0:
                 if token.type != .T_RETURN_KEYWORD {
@@ -199,7 +198,6 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, AstNode) {
 
         buf: [8]u8;
         strconv.itoa(buf[:], i)
-        log(.Debug, "i in resolve_function = ", string(buf[:]));
 
         if i != 0 do token = next_token(iter);
         else do token = &iter.tokens[iter.i];

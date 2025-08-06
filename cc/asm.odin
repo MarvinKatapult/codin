@@ -1,6 +1,9 @@
 package cc
 
 import "core:strings"
+import "core:fmt"
+import "core:os/os2"
+import "core:sys/linux/"
 
 @(private="file")
 append_fasm_header :: proc(str_b: ^strings.Builder) -> bool {
@@ -94,4 +97,38 @@ generate_asm :: proc(ast: AstNode) -> string {
     if !generate_for_ast_node(&str_b, ast) do return "";
 
     return strings.clone(strings.to_string(str_b));
+}
+
+@(private="package")
+compile_asm :: proc(asm_str: string, src_name: string, bin_name: string) -> bool {
+	process_state, stdout, stderr, err := os2.process_exec(
+		os2.Process_Desc { 
+			command = {"fasm", src_name, bin_name},
+		}, 
+		context.temp_allocator
+	);
+
+	log(.Proto, "FASM Output:");
+	if len(stdout) > 0 {
+		yellow_stdout := fmt.tprintf("%s%s%s", YELLOW, transmute(string)stdout, RESET);
+		log(.Proto, yellow_stdout, cc_prefix = false);
+	}
+	if len(stderr) > 0 {
+		stderr_fmt := fmt.tprintf("FASM-%s", transmute(string)stderr);
+		log(.Error, stderr_fmt);
+	}
+
+	if err != nil {
+		log(.Error, "FASM could not be started!\nFasm is a dependency of this C compiler:\nhttps://flatassembler.net/");
+		return false;
+	} else {
+		log(.Proto, "Compiling of file ", bin_name, " was successful!");
+	}
+	// r-xr-xr-x
+	if os2.chmod(bin_name, 0o755) != nil {
+		log(.Error, "File rights of ", bin_name, " could not be set properly!");
+		return false;
+	}
+
+	return true;
 }

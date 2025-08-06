@@ -3,6 +3,15 @@ package cc
 import "core:fmt"
 import "core:os"
 
+start_compiling :: proc() {
+	if len(os.args) < 2 {
+		fmt.printfln("My C Compiler - Usage:%s [*.c]", os.args[0]);
+		return;
+	}
+
+	compile_file(os.args[1]);
+}
+
 compile_file :: proc(filepath: string) -> bool {
     log(.Proto, "Compiling file: ", filepath);
     log(.Proto, "Lexing file: ", filepath);
@@ -33,10 +42,13 @@ compile_file :: proc(filepath: string) -> bool {
     }
     defer delete(assembler);
 
-    log(.Proto, "Writing Assembly to a.fasm!");
-    os.write_entire_file("a.fasm", transmute([]u8)assembler);
+	src_file := "main.fasm";
+    log(.Proto, "Writing Assembly to ", src_file, "!");
+    os.write_entire_file(src_file, transmute([]u8)assembler);
 
     log(.Proto, assembler);
+
+	compile_asm(assembler, "main.fasm", "my_program") or_return;
 
     return true;
 }
