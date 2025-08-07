@@ -31,6 +31,41 @@ calc_ret_value :: proc(statement_node: AstNode) -> (bool, string){
 }
 
 @(private="file")
+rec_calc_value_expression :: proc(expression_node: AstNode) -> (bool, string) {
+
+
+	if expression_node.type == .AST_EXPRESSION_CONSTANT {
+		return true, expression_node.value.(AstExpression).value;
+	}
+
+	if expression_node.type != .AST_EXPRESSION_UNARY || expression_node.type != .AST_EXPRESSION_CONSTANT {
+		log(.Error, "Resolving Expression failed because there was no valid type of Expression Node");
+		return false, "";
+	}
+
+	// TODO!
+
+	return false, "";
+}
+
+@(private="file")
+calc_ret_value_of_expressions :: proc(statement_node: AstNode) -> (bool, string) {
+	if (len(statement_node.childs) <= 0) {
+		log(.Error, "Expected expression in Statement Node! (This should not happen!)");
+		return false, "";
+	}
+
+
+	expression := statement_node.childs[0];
+
+	for len(expression.childs) >= 0 {
+		expression = expression.childs[0];
+	}
+
+	return rec_calc_value_expression(expression);
+}
+
+@(private="file")
 generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: AstNode, function_label: string) -> bool {
 
     statement_t := statement_node.value.(AstStatement);
@@ -47,6 +82,10 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: AstNode,
                 strings.write_string(str_b, "\tret \t\t; Returning\n");
             } else {
                 strings.write_string(str_b, "\tmov rdi, ");
+				ok, ret_value := calc_ret_value_of_expressions(statement_node);
+				if !ok {
+					return false;
+				}
                 strings.write_string(str_b, ret_value);
                 strings.write_string(str_b, "\t; Setting exit code\n");
                 strings.write_string(str_b, "\tmov rax, 60\t; (sys_exit)\n");
@@ -115,7 +154,8 @@ compile_asm :: proc(asm_str: string, src_name: string, bin_name: string) -> bool
 	}
 	if len(stderr) > 0 {
 		stderr_fmt := fmt.tprintf("FASM-%s", transmute(string)stderr);
-		log(.Error, stderr_fmt);
+		log(.Error, stderr_fmt, cc_prefix = false);
+		return false;
 	}
 
 	if err != nil {

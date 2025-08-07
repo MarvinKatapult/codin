@@ -11,7 +11,8 @@ NodeType :: enum {
     AST_RETURN,
     AST_CONSTANT,
     AST_RETURN_STATEMENT,
-    AST_EXPRESSION,
+    AST_EXPRESSION_CONSTANT,
+    AST_EXPRESSION_UNARY,
 }
 
 @(private="package")
@@ -43,17 +44,27 @@ AstDataType :: enum {
 
 @(private="package")
 AstStatement :: struct {
+	return_value: string,
 }
 
 @(private="package")
 AstExpression :: struct {
     value: string,
+    operator: Operator,
 }
 
 @(private="file")
 TokenIter :: struct {
     tokens: []Token,
     i: int,
+}
+
+@(private="file")
+Operator :: enum {
+	OP,
+	OP_UNARY_MINUS,
+	OP_LOGICAL_NOT,
+	OP_BIT_NEGATION,
 }
 
 @(private="file")
@@ -75,6 +86,7 @@ cleanup_ast_function :: proc(function_t: AstFunction) {
 @(private="package")
 cleanup_ast_statement :: proc(statement_t: AstStatement) {
     log(.Debug, "Cleaning AstStatement")
+	delete(statement_t.return_value);
 }
 
 @(private="package")
@@ -100,38 +112,51 @@ cleanup_ast_node :: proc(root: ^AstNode) {
     if (root.childs != nil) do delete(root.childs);
 }
 
+@(private="file")
+get_operator_for_token :: proc(token: ^Token) -> (bool, Operator) {
+	#partial switch token.type {
+		case .T_MINUS:			return true, .OP_UNARY_MINUS;
+		case .T_TILDE:			return true, .OP_BIT_NEGATION;
+		case .T_EXCLAMATION:	return true, .OP_LOGICAL_NOT;
+		case: return false, nil;
+	}
+}
+
 @(private="package")
 resolve_expression :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, AstNode) {
     node: AstNode;
-    node.type = .AST_EXPRESSION;
     expression_t: AstExpression;
+	node.value = expression_t;
+	
+	token := &iter.tokens[iter.i];
 
-    token: ^Token;
-    for i := 0; ; i += 1 {
-        node.value = expression_t;
-        
-        if i != 0 do token = next_token(iter);
-        else do token = &iter.tokens[iter.i];
+	if token == nil {
+		log(.Error, "Ran out of tokens whilst resolving expression: Aborting");
+		return false, node;
+	}
 
-        if token == nil {
-            log(.Error, "Ran out of tokens whilst resolving expression: Aborting");
-            return false, node;
-        }
-
-        switch i {
-            case 0:
-                if token.type != .T_INT_LITERAL {
-                    log_error_with_token(token^, "is not a valid return value!");
-                    cleanup_ast_expression(expression_t);
-                    return false, node;
-                }
-                
-                expression_t.value = strings.clone(token.value);
-                node.value = expression_t;
-                return true, node;
-        }
+	if token.type == .T_INT_LITERAL {
+		node.type = .AST_EXPRESSION_CONSTANT;
+		expression_t.value = strings.clone(token.value);
+	} else {
+		ok: bool;
+		ok, expression_t.operator = get_operator_for_token(token);
+		if !ok {
+			log_error_with_token(token^, "is not a valid Unary Operator!");
+			return false, node;
+		}
+		
+		next_token(iter);
+		child_expression: AstNode;
+		ok, child_expression = resolve_expression(&node, iter);
+		if !ok {
+			return false, node;
+		}
+		node.type = .AST_EXPRESSION_UNARY;
     }
-    return false, node;
+	node.value = expression_t;
+	append(&root.childs, node);
+	return true, node;
 }
 
 @(private="package")
@@ -157,23 +182,23 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, AstNode) {
             case 0:
                 if token.type != .T_RETURN_KEYWORD {
                     log_error_with_token(token^, "Statement has to begin with return keyword");
-                    cleanup_ast_statement(statement_t);
+					cleanup_ast_node(&node);
                     return false, node;
                 }
                 node.type = .AST_RETURN_STATEMENT;
             case 1:
-                ok, node_expression := resolve_expression(root, iter)
+                ok, node_expression := resolve_expression(&node, iter)
                 if !ok {
-                    cleanup_ast_statement(statement_t);
+					cleanup_ast_node(&node);
                     return false, node;
                 }
-                append(&node.childs, node_expression);
+				statement_t.return_value = node_expression.value.(AstExpression).value;
 
                 next_token(iter);
                 token = &iter.tokens[iter.i];
                 if token.type != .T_SEMICOLON {
                     log_error_with_token(token^, "Statement has to end with ;");
-                    cleanup_ast_statement(statement_t);
+					cleanup_ast_node(&node);
                     return false, node;
                 }
                 

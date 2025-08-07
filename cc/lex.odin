@@ -18,6 +18,9 @@ TokenType :: enum {
     T_VOID_KEYWORD,
     T_IDENTIFIER,
     T_INT_LITERAL,
+    T_MINUS,
+    T_TILDE,
+    T_EXCLAMATION,
 }
 
 @(private="package")
@@ -52,6 +55,12 @@ is_special_symbol :: proc(symbol: rune) -> (bool, TokenType) {
             return true, TokenType.T_CLOSE_PARANTHESIS;
         case ';':
             return true, TokenType.T_SEMICOLON;
+        case '!':
+            return true, TokenType.T_EXCLAMATION;
+        case '~':
+            return true, TokenType.T_TILDE;
+        case '-':
+            return true, TokenType.T_MINUS;
     }
 
     return false, nil;

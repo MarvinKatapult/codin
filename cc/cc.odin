@@ -5,7 +5,7 @@ import "core:os"
 
 start_compiling :: proc() {
 	if len(os.args) < 2 {
-		fmt.printfln("My C Compiler - Usage:%s [*.c]", os.args[0]);
+		fmt.printfln("My C Compiler\nUsage:%s [*.c]", os.args[0]);
 		return;
 	}
 
@@ -46,7 +46,7 @@ compile_file :: proc(filepath: string) -> bool {
     log(.Proto, "Writing Assembly to ", src_file, "!");
     os.write_entire_file(src_file, transmute([]u8)assembler);
 
-    log(.Proto, assembler);
+    log(.Proto, assembler, cc_prefix = false);
 
 	compile_asm(assembler, "main.fasm", "my_program") or_return;
 
