@@ -24,45 +24,72 @@ append_fasm_header :: proc(str_b: ^strings.Builder) -> bool {
 }
 
 @(private="file")
-calc_ret_value :: proc(statement_node: AstNode) -> (bool, string){
-    // At the moment we can expect that there is just one expression in statement:
-    expression_t := statement_node.childs[0].value.(AstExpression);
-    return true, expression_t.value;
+generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: AstNode) -> bool {
+	expression_t := expression_node.value.(AstExpression);
+
+	switch expression_t.operator {
+		case .OP_BIT_NEGATION:
+			strings.write_string(str_b, "\tnot rax\t\t; negating Value in RAX (~)\n");
+		case .OP_LOGICAL_NOT:
+			strings.write_string(str_b, "\tcmp eax, 0\t; compare eax with 0\n");
+			strings.write_string(str_b, "\tsete al\t\t; setting al to 1 if equal flag is set\n");
+			strings.write_string(str_b, "\tmovzx eax, al\t; move al in eax\n");
+		case .OP_UNARY_MINUS:
+			strings.write_string(str_b, "\tneg rax\t\t; negating Value in RAX (~)\n");
+		case .OP:
+			log(.Error, "Not a valid Operator!");
+			return false;
+	}
+
+	strings.write_string(str_b, "\n");
+
+	return true;
 }
 
 @(private="file")
-rec_calc_value_expression :: proc(expression_node: AstNode) -> (bool, string) {
-
-
-	if expression_node.type == .AST_EXPRESSION_CONSTANT {
-		return true, expression_node.value.(AstExpression).value;
+generate_asm_for_expression_bottom_up :: proc(str_b: ^strings.Builder, expression_node: AstNode) -> bool {
+	expression_t := expression_node.value.(AstExpression);
+	#partial switch expression_node.type {
+		case .AST_EXPRESSION_CONSTANT:
+			strings.write_string(str_b, "\tmov rax, ");
+			strings.write_string(str_b, expression_t.value);
+			strings.write_string(str_b, "\t; moving value of expression directly into rax\n\n");
+			return true;
+		case .AST_EXPRESSION_UNARY:
+			return generate_asm_for_operator(str_b, expression_node);
 	}
 
-	if expression_node.type != .AST_EXPRESSION_UNARY || expression_node.type != .AST_EXPRESSION_CONSTANT {
-		log(.Error, "Resolving Expression failed because there was no valid type of Expression Node");
-		return false, "";
-	}
+	log(.Error, "Expression must be constant or unary expression!");
 
-	// TODO!
-
-	return false, "";
+	return false;
 }
 
 @(private="file")
-calc_ret_value_of_expressions :: proc(statement_node: AstNode) -> (bool, string) {
-	if (len(statement_node.childs) <= 0) {
-		log(.Error, "Expected expression in Statement Node! (This should not happen!)");
-		return false, "";
+calc_value_of_expression :: proc(str_b: ^strings.Builder, expression_node: AstNode) -> bool {
+	tmp_expression_tree: [dynamic]AstNode;
+	defer delete(tmp_expression_tree);
+
+	tmp_node := expression_node;
+	for {
+		log(.Debug, "TmpExpression: ", fmt.tprintf("%s", tmp_node));
+		append(&tmp_expression_tree, tmp_node);
+		tmp_node = tmp_node.childs[0];
+		if len(tmp_node.childs) <= 0 {
+			append(&tmp_expression_tree, tmp_node);
+			break;
+		}
 	}
 
 
-	expression := statement_node.childs[0];
-
-	for len(expression.childs) >= 0 {
-		expression = expression.childs[0];
+	#reverse for node in tmp_expression_tree {
+		ok := generate_asm_for_expression_bottom_up(str_b, node);
+		if !ok {
+			log(.Error, "Generating asm for expression was not successful");
+			return false;
+		}
 	}
 
-	return rec_calc_value_expression(expression);
+	return true;
 }
 
 @(private="file")
@@ -71,23 +98,16 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: AstNode,
     statement_t := statement_node.value.(AstStatement);
 
     #partial switch statement_node.type {
-        case .AST_RETURN_STATEMENT:
-            ok, ret_value := calc_ret_value(statement_node);
+    case .AST_RETURN_STATEMENT:
+			if len(statement_node.childs) <= 0 do return false;
+            ok := calc_value_of_expression(str_b, statement_node.childs[0]);
             if !ok do return false;
 
             if function_label != "start" {
-                strings.write_string(str_b, "\tmov rax, ");
-                strings.write_string(str_b, ret_value);
                 strings.write_string(str_b, "\t; Setting return code\n");
                 strings.write_string(str_b, "\tret \t\t; Returning\n");
             } else {
-                strings.write_string(str_b, "\tmov rdi, ");
-				ok, ret_value := calc_ret_value_of_expressions(statement_node);
-				if !ok {
-					return false;
-				}
-                strings.write_string(str_b, ret_value);
-                strings.write_string(str_b, "\t; Setting exit code\n");
+                strings.write_string(str_b, "\tmov rdi, rax\t; move calculated return value in rdi\n");
                 strings.write_string(str_b, "\tmov rax, 60\t; (sys_exit)\n");
                 strings.write_string(str_b, "\tsyscall\t\t; Shutting down program\n");
             }
