@@ -73,7 +73,7 @@ calc_value_of_expression :: proc(str_b: ^strings.Builder, expression_node: AstNo
 	for {
 		log(.Debug, "TmpExpression: ", fmt.tprintf("%s", tmp_node));
 		append(&tmp_expression_tree, tmp_node);
-		tmp_node = tmp_node.childs[0];
+		if len(tmp_node.childs) > 0 do tmp_node = tmp_node.childs[0];
 		if len(tmp_node.childs) <= 0 {
 			append(&tmp_expression_tree, tmp_node);
 			break;
