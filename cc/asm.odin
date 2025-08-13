@@ -24,7 +24,7 @@ append_fasm_header :: proc(str_b: ^strings.Builder) -> bool {
 }
 
 @(private="file")
-generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: AstNode) -> bool {
+generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^AstNode) -> bool {
 	expression_t := expression_node.value.(AstExpression);
 
 	switch expression_t.operator {
@@ -47,7 +47,7 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: AstN
 }
 
 @(private="file")
-generate_asm_for_expression_bottom_up :: proc(str_b: ^strings.Builder, expression_node: AstNode) -> bool {
+generate_asm_for_expression_bottom_up :: proc(str_b: ^strings.Builder, expression_node: ^AstNode) -> bool {
 	expression_t := expression_node.value.(AstExpression);
 	#partial switch expression_node.type {
 		case .AST_EXPRESSION_CONSTANT:
@@ -65,35 +65,31 @@ generate_asm_for_expression_bottom_up :: proc(str_b: ^strings.Builder, expressio
 }
 
 @(private="file")
-calc_value_of_expression :: proc(str_b: ^strings.Builder, expression_node: AstNode) -> bool {
-	tmp_expression_tree: [dynamic]AstNode;
+calc_value_of_expression :: proc(str_b: ^strings.Builder, expression_node: ^AstNode) -> bool {
+	tmp_expression_tree: [dynamic]^AstNode;
 	defer delete(tmp_expression_tree);
 
 	tmp_node := expression_node;
 	for {
-		log(.Debug, "TmpExpression: ", fmt.tprintf("%s", tmp_node));
-		append(&tmp_expression_tree, tmp_node);
-		if len(tmp_node.childs) > 0 do tmp_node = tmp_node.childs[0];
-		if len(tmp_node.childs) <= 0 {
-			append(&tmp_expression_tree, tmp_node);
-			break;
-		}
+		if len(tmp_node.childs) > 0 {
+			tmp_node = tmp_node.childs[0];
+		} else do break;
 	}
 
-
-	#reverse for node in tmp_expression_tree {
-		ok := generate_asm_for_expression_bottom_up(str_b, node);
-		if !ok {
+	for {
+		if !generate_asm_for_expression_bottom_up(str_b, tmp_node) {
 			log(.Error, "Generating asm for expression was not successful");
 			return false;
 		}
+		tmp_node = tmp_node.parent;
+		if tmp_node.type == .AST_RETURN_STATEMENT do break;
 	}
 
 	return true;
 }
 
 @(private="file")
-generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: AstNode, function_label: string) -> bool {
+generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, function_label: string) -> bool {
 
     statement_t := statement_node.value.(AstStatement);
 
@@ -117,7 +113,7 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: AstNode,
 }
 
 @(private="file")
-generate_for_function :: proc(str_b: ^strings.Builder, function_node: AstNode) -> bool {
+generate_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNode) -> bool {
 
     function_t := function_node.value.(AstFunction);
 
@@ -135,7 +131,7 @@ generate_for_function :: proc(str_b: ^strings.Builder, function_node: AstNode) -
 }
 
 @(private="file")
-generate_for_ast_node :: proc(str_b: ^strings.Builder, node: AstNode) -> bool {
+generate_for_ast_node :: proc(str_b: ^strings.Builder, node: ^AstNode) -> bool {
     #partial switch node.type {
         case .AST_PROGRAM:
             for child in node.childs {
@@ -148,7 +144,7 @@ generate_for_ast_node :: proc(str_b: ^strings.Builder, node: AstNode) -> bool {
 }
 
 @(private="package")
-generate_asm :: proc(ast: AstNode) -> string {
+generate_asm :: proc(ast: ^AstNode) -> string {
     str_b := strings.builder_make();
     defer strings.builder_destroy(&str_b);
 

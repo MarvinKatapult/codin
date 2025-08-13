@@ -2,7 +2,6 @@ package cc
 
 import "core:fmt"
 import "core:strings"
-import "core:path/filepath"
 
 @(private="package")
 RED     :: "\033[31m"
@@ -70,7 +69,7 @@ log_error_with_token :: proc(token: Token, msg: ..string) {
 }
 
 @(private="package")
-log_ast :: proc(root: AstNode, x_offset: int = 0) {
+log_ast :: proc(root: ^AstNode, x_offset: int = 0) {
     if x_offset == 0 {
         log(.Proto, "Logging AST:");
     }
@@ -85,7 +84,7 @@ log_ast :: proc(root: AstNode, x_offset: int = 0) {
         case AstStatement:
             fmt.printfln("%s[%s] %s", YELLOW, root.type, RESET);
         case AstExpression:
-            fmt.printfln("%s[%s] %s %s %s", YELLOW, root.type, v.value, v.operator, RESET);
+            fmt.printfln("%s[%s] %s %s Parent: %s %s", YELLOW, root.type, v.value, v.operator, root.parent.type, RESET);
         case:
             fmt.printfln("%s[%s]%s", YELLOW, root.type, RESET);
     }

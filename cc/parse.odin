@@ -24,7 +24,8 @@ AstValue :: union {
 
 @(private="package")
 AstNode :: struct {
-    childs: [dynamic]AstNode,
+    childs: [dynamic]^AstNode,
+	parent: ^AstNode,
     type: NodeType,
     value: AstValue,
 }
@@ -67,6 +68,11 @@ Operator :: enum {
 	OP_BIT_NEGATION,
 }
 
+append_ast_node :: proc(parent: ^AstNode, child: ^AstNode) {
+	append(&parent.childs, child);
+	child.parent = parent;
+}
+
 @(private="file")
 next_token :: proc(iter: ^TokenIter) -> ^Token {
     iter.i += 1;
@@ -99,7 +105,7 @@ cleanup_ast_expression :: proc(expression_t: AstExpression) {
 cleanup_ast_node :: proc(root: ^AstNode) {
     for &child in root.childs {
         log(.Debug, "Deleting Child of type: ", fmt.tprintf("%s", child.type));
-        cleanup_ast_node(&child);
+        cleanup_ast_node(child);
     }
     switch v in root.value {
         case AstFunction:
@@ -110,6 +116,7 @@ cleanup_ast_node :: proc(root: ^AstNode) {
             cleanup_ast_expression(v);
     }
     if (root.childs != nil) do delete(root.childs);
+	free(root);
 }
 
 @(private="file")
@@ -123,8 +130,8 @@ get_operator_for_token :: proc(token: ^Token) -> (bool, Operator) {
 }
 
 @(private="package")
-resolve_expression :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, AstNode) {
-    node: AstNode;
+resolve_expression :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) {
+	node := new(AstNode);
     expression_t: AstExpression;
 	node.value = expression_t;
 	
@@ -147,21 +154,21 @@ resolve_expression :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, AstNode) 
 		}
 		
 		next_token(iter);
-		child_expression: AstNode;
-		ok, child_expression = resolve_expression(&node, iter);
+		child_expression: ^AstNode;
+		ok, child_expression = resolve_expression(node, iter);
 		if !ok {
 			return false, node;
 		}
 		node.type = .AST_EXPRESSION_UNARY;
     }
 	node.value = expression_t;
-	append(&root.childs, node);
+	append_ast_node(root, node);
 	return true, node;
 }
 
 @(private="package")
-resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, AstNode) {
-    node: AstNode;
+resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) {
+	node := new(AstNode);
     statement_t: AstStatement;
 
     token: ^Token;
@@ -182,14 +189,14 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, AstNode) {
             case 0:
                 if token.type != .T_RETURN_KEYWORD {
                     log_error_with_token(token^, "Statement has to begin with return keyword");
-					cleanup_ast_node(&node);
+					cleanup_ast_node(node);
                     return false, node;
                 }
                 node.type = .AST_RETURN_STATEMENT;
             case 1:
-                ok, node_expression := resolve_expression(&node, iter)
+                ok, node_expression := resolve_expression(node, iter)
                 if !ok {
-					cleanup_ast_node(&node);
+					cleanup_ast_node(node);
                     return false, node;
                 }
 				statement_t.return_value = node_expression.value.(AstExpression).value;
@@ -198,7 +205,7 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, AstNode) {
                 token = &iter.tokens[iter.i];
                 if token.type != .T_SEMICOLON {
                     log_error_with_token(token^, "Statement has to end with ;");
-					cleanup_ast_node(&node);
+					cleanup_ast_node(node);
                     return false, node;
                 }
                 
@@ -210,9 +217,9 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, AstNode) {
 }
 
 @(private="package")
-resolve_function :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, AstNode) {
+resolve_function :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) {
 
-    node: AstNode;
+	node := new(AstNode);
     node.type = .AST_FUNCTION;
 
     function_t: AstFunction;
@@ -269,11 +276,11 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, AstNode) {
                 }
             case 6..<len(iter.tokens):
                 if token.type != .T_CLOSE_BRACE {
-                    ok, statement_node := resolve_statement(&node, iter);
+                    ok, statement_node := resolve_statement(node, iter);
                     if !ok {
                         return false, node;
                     }
-                    append(&node.childs, statement_node);
+                    append_ast_node(node, statement_node);
                 } else {
                     return true, node;
                 }
@@ -285,8 +292,8 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, AstNode) {
 }
 
 @(private="package")
-build_ast :: proc(tokens: []Token) -> (bool, AstNode) {
-    root: AstNode;
+build_ast :: proc(tokens: []Token) -> (bool, ^AstNode) {
+	root := new(AstNode);
 
     iter: TokenIter;
     iter.tokens = tokens;
@@ -296,8 +303,8 @@ build_ast :: proc(tokens: []Token) -> (bool, AstNode) {
             log(.Error, "Ran out of Tokens to build ast with: Aborting");
         }
 
-        ok, node := resolve_function(&root, &iter);
-        append(&root.childs, node);
+        ok, node := resolve_function(root, &iter);
+        append_ast_node(root, node);
         if !ok {
             log(.Error, "Could not resolve function: Aborting");
             return false, root;

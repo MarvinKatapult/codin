@@ -29,7 +29,7 @@ compile_file :: proc(filepath: string) -> bool {
     log(.Proto, "Building AST for file: ", filepath);
     ok, ast := build_ast(tokens[:]);
     log_ast(ast);
-    defer cleanup_ast_node(&ast);
+    defer cleanup_ast_node(ast);
     if !ok {
         log(.Error, "Building AST was not successful");
         return false;
