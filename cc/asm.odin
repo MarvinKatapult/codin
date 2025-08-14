@@ -31,9 +31,7 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 		case .OP_BIT_NEGATION:
 			strings.write_string(str_b, "\tnot rax\t\t; negating Value in RAX (~)\n")
 		case .OP_LOGICAL_NOT:
-			strings.write_string(str_b, "\tcmp eax, 0\t; compare eax with 0\n")
-			strings.write_string(str_b, "\tsete al\t\t; setting al to 1 if equal flag is set\n")
-			strings.write_string(str_b, "\tmovzx eax, al\t; move al in eax\n")
+			strings.write_string(str_b, "\txor rax, 1\t; Flip LSB true <-> false\n")
 		case .OP_UNARY_MINUS:
 			strings.write_string(str_b, "\tneg rax\t\t; negating Value in RAX (~)\n")
 		case .OP:
