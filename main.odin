@@ -3,5 +3,5 @@ package main
 import "cc"
 
 main :: proc() {
-	cc.start_compiling();
+	cc.start_compiling()
 }
