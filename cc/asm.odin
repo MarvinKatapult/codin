@@ -27,15 +27,28 @@ append_fasm_header :: proc(str_b: ^strings.Builder) -> bool {
 generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^AstNode) -> bool {
 	expression_t := expression_node.value.(AstExpression)
 
-	#partial switch expression_t.operator {
+	switch expression_t.operator {
 		case .OP_BIT_NEGATION:
 			strings.write_string(str_b, "\tnot rax\t\t; negating Value in RAX (~)\n")
 		case .OP_LOGICAL_NOT:
 			strings.write_string(str_b, "\txor rax, 1\t; Flip LSB true <-> false\n")
 		case .OP_UNARY_MINUS:
 			strings.write_string(str_b, "\tneg rax\t\t; negating Value in RAX (~)\n")
+		case .OP_BINARY_PLUS:
+			strings.write_string(str_b, "\tadd rax, rdi\t\t; Adding rax and rdi\n")
+		case .OP_BINARY_MINUS:
+			strings.write_string(str_b, "\tsub rdi, rax\t\t; Subtracting rdi from rax\n")
+			strings.write_string(str_b, "\tmov rax, rdi\t\t; Moving result in rax\n")
+		case .OP_BINARY_MULT:
+			strings.write_string(str_b, "\tmul rdi\t\t; Multiplying rdi with rax\n")
+		case .OP_BINARY_DIV:
+			strings.write_string(str_b, "\tmov rdx, rdi    ; Moving rdi to rdx\n")
+			strings.write_string(str_b, "\tmov rcx, rax    ; Moving rax to rcx\n")
+			strings.write_string(str_b, "\tmov rax, rdx    ; moving rdx in rax\n")
+			strings.write_string(str_b, "\tcqo             ; Expand RAX to RAX:RDX 128 Bit Register\n")
+			strings.write_string(str_b, "\tidiv rcx        ; RAX = RAX / RCX\n")
 		case .OP:
-			log(.Error, "Not a valid Operator!")
+			log(.Error, "Not a valid Operator:", fmt.tprintf("%s", expression_node^))
 			return false
 	}
 
@@ -45,18 +58,49 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 }
 
 @(private="file")
-generate_asm_for_expression_bottom_up :: proc(str_b: ^strings.Builder, expression_node: ^AstNode) -> bool {
+generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode) -> bool {
 	expression_t := expression_node.value.(AstExpression)
+	log(.Debug, "Calling generate_asm_for_expr with Expressiontype:", fmt.tprintf("%s", expression_node.type))
 	#partial switch expression_node.type {
 		case .AST_EXPRESSION_CONSTANT:
+			if len(expression_node.childs) != 0 {
+				log(.Error, "Constant Expression Type cannot have childs")
+				return false
+			}
 			strings.write_string(str_b, "\tmov rax, ")
 			strings.write_string(str_b, expression_t.value)
 			strings.write_string(str_b, "\t; moving value of expression directly into rax\n\n")
 			return true
 		case .AST_EXPRESSION_UNARY:
+			if len(expression_node.childs) != 1 {
+				log(.Error, "Unary Expression Type must have exactly 1 child")
+				return false
+			}
+			child := expression_node.childs[0]
+			if !generate_asm_for_expr(str_b, child) do return false
+
+			return generate_asm_for_operator(str_b, expression_node)
+			
+		case .AST_EXPRESSION_BINARY:
+			if len(expression_node.childs) != 2 {
+				log(.Error, "Binary Expression Type must have exactly 2 childs")
+				return false
+			}
+
+			valuel := expression_node.childs[0]
+			if !generate_asm_for_expr(str_b, valuel) do return false
+		
+			strings.write_string(str_b, "\tpush rax\t; Push to stack\n\n")
+
+			valuer := expression_node.childs[1]
+			if !generate_asm_for_expr(str_b, valuer) do return false
+
+			strings.write_string(str_b, "\tpop rdi\t; Popping Value to rdi off stack\n\n")
+
 			return generate_asm_for_operator(str_b, expression_node)
 	}
 
+	log(.Debug, "Partially generated asm:\n", strings.to_string(str_b^))
 	log(.Error, "Expression must be constant or unary expression!")
 
 	return false
@@ -64,23 +108,10 @@ generate_asm_for_expression_bottom_up :: proc(str_b: ^strings.Builder, expressio
 
 @(private="file")
 calc_value_of_expression :: proc(str_b: ^strings.Builder, expression_node: ^AstNode) -> bool {
-	tmp_expression_tree: [dynamic]^AstNode
-	defer delete(tmp_expression_tree)
 
-	tmp_node := expression_node
-	for {
-		if len(tmp_node.childs) > 0 {
-			tmp_node = tmp_node.childs[0]
-		} else do break
-	}
-
-	for {
-		if !generate_asm_for_expression_bottom_up(str_b, tmp_node) {
-			log(.Error, "Generating asm for expression was not successful")
-			return false
-		}
-		tmp_node = tmp_node.parent
-		if tmp_node.type == .AST_RETURN_STATEMENT do break
+	if !generate_asm_for_expr(str_b, expression_node) {
+		log(.Error, "Generating asm for expression was not successful")
+		return false
 	}
 
 	return true
