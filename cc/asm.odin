@@ -35,7 +35,7 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 		case .OP_UNARY_MINUS:
 			strings.write_string(str_b, "\tneg rax\t\t; negating Value in RAX (~)\n")
 		case .OP_BINARY_PLUS:
-			strings.write_string(str_b, "\tadd rax, rdi\t\t; Adding rax and rdi\n")
+			strings.write_string(str_b, "\tadd rax, rdi\t; Adding rax and rdi\n")
 		case .OP_BINARY_MINUS:
 			strings.write_string(str_b, "\tsub rdi, rax\t\t; Subtracting rdi from rax\n")
 			strings.write_string(str_b, "\tmov rax, rdi\t\t; Moving result in rax\n")
@@ -47,6 +47,24 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 			strings.write_string(str_b, "\tmov rax, rdx    ; moving rdx in rax\n")
 			strings.write_string(str_b, "\tcqo             ; Expand RAX to RAX:RDX 128 Bit Register\n")
 			strings.write_string(str_b, "\tidiv rcx        ; RAX = RAX / RCX\n")
+		case .OP_BINARY_LESS:
+			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax < rdi\n")
+			strings.write_string(str_b, "\tsetl al\t\t; Set al to 1 if true\n")
+		case .OP_BINARY_LESS_EQUAL:
+			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax <= rdi\n")
+			strings.write_string(str_b, "\tsetle al\t\t; Set al to 1 if true\n")
+		case .OP_BINARY_GREATER:
+			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax > rdi\n")
+			strings.write_string(str_b, "\tsetg al\t\t; Set al to 1 if true\n")
+		case .OP_BINARY_GREATER_EQUAL:
+			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax >= rdi\n")
+			strings.write_string(str_b, "\tsetge al\t\t; Set al to 1 if true\n")
+		case .OP_BINARY_EQUAL:
+			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax == rdi\n")
+			strings.write_string(str_b, "\tsete al\t\t; Set al to 1 if true\n")
+		case .OP_BINARY_NOT_EQUAL:
+			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax != rdi\n")
+			strings.write_string(str_b, "\tsetne al\t; Set al to 1 if true\n")
 		case .OP:
 			log(.Error, "Not a valid Operator:", fmt.tprintf("%s", expression_node^))
 			return false
@@ -95,7 +113,7 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 			valuer := expression_node.childs[1]
 			if !generate_asm_for_expr(str_b, valuer) do return false
 
-			strings.write_string(str_b, "\tpop rdi\t; Popping Value to rdi off stack\n\n")
+			strings.write_string(str_b, "\tpop rdi\t\t; Popping Value to rdi off stack\n\n")
 
 			return generate_asm_for_operator(str_b, expression_node)
 	}
@@ -129,7 +147,6 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
             if !ok do return false
 
             if function_label != "start" {
-                strings.write_string(str_b, "\t; Setting return code\n")
                 strings.write_string(str_b, "\tret \t\t; Returning\n")
             } else {
                 strings.write_string(str_b, "\tmov rdi, rax\t; move calculated return value in rdi\n")

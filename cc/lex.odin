@@ -24,6 +24,13 @@ TokenType :: enum {
     T_FSLASH,
     T_TILDE,
     T_EXCLAMATION,
+    T_LESS,
+    T_GREATER,
+    T_LESS_EQUAL,
+    T_GREATER_EQUAL,
+    T_ASSIGNMENT,
+    T_EQUAL_EQUAL,
+    T_NOT_EQUAL,
 }
 
 @(private="package")
@@ -72,6 +79,12 @@ is_special_symbol :: proc(symbol: rune) -> (bool, TokenType) {
             return true, TokenType.T_STAR
         case '/':
             return true, TokenType.T_FSLASH
+        case '<':
+            return true, TokenType.T_LESS
+        case '>':
+            return true, TokenType.T_GREATER
+        case '=':
+            return true, TokenType.T_ASSIGNMENT
     }
 
     return false, nil
@@ -190,6 +203,32 @@ lex :: proc(filename: string) -> [dynamic]Token {
 
         is_space := strings.is_space(c)
         special_symbol, type := is_special_symbol(c)
+
+		if c == '=' {
+			last_token := &ret[len(ret)-1]
+			#partial switch last_token.type {
+				case .T_LESS:
+					last_token.type  = .T_LESS_EQUAL
+					delete(last_token.value)
+					last_token.value = "<="
+					continue;
+				case .T_GREATER:
+					last_token.type = .T_GREATER_EQUAL
+					delete(last_token.value)
+					last_token.value = ">="
+					continue;
+				case .T_ASSIGNMENT:
+					last_token.type = .T_EQUAL_EQUAL
+					delete(last_token.value)
+					last_token.value = "=="
+					continue;
+				case .T_EXCLAMATION:
+					last_token.type = .T_NOT_EQUAL
+					delete(last_token.value)
+					last_token.value = "!="
+					continue;
+			}
+		}
 
         if is_space && len(buf) == 0 {
             strings.builder_reset(&str_b)

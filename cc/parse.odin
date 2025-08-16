@@ -71,6 +71,12 @@ Operator :: enum {
 	OP_BINARY_MINUS,
 	OP_BINARY_MULT,
 	OP_BINARY_DIV,
+	OP_BINARY_LESS,
+	OP_BINARY_LESS_EQUAL,
+	OP_BINARY_GREATER,
+	OP_BINARY_GREATER_EQUAL,
+	OP_BINARY_EQUAL,
+	OP_BINARY_NOT_EQUAL,
 }
 
 append_ast_node :: proc(parent: ^AstNode, child: ^AstNode) {
@@ -138,6 +144,12 @@ get_operator_for_token :: proc(token: ^Token, unary: bool) -> (bool, Operator) {
 		case .T_FSLASH:			return true, .OP_BINARY_DIV
 		case .T_TILDE:			return true, .OP_BIT_NEGATION
 		case .T_EXCLAMATION:	return true, .OP_LOGICAL_NOT
+		case .T_GREATER:		return true, .OP_BINARY_GREATER
+		case .T_GREATER_EQUAL:	return true, .OP_BINARY_GREATER_EQUAL
+		case .T_LESS:			return true, .OP_BINARY_LESS
+		case .T_LESS_EQUAL:		return true, .OP_BINARY_LESS_EQUAL
+		case .T_EQUAL_EQUAL:	return true, .OP_BINARY_EQUAL
+		case .T_NOT_EQUAL:		return true, .OP_BINARY_NOT_EQUAL
 		case: return false, nil
 	}
 }
@@ -263,10 +275,78 @@ resolve_expr_additive :: proc(parent: ^AstNode, iter: ^TokenIter) -> (bool, ^Ast
     return true, left_child
 }
 
+@(private="file")
+resolve_expr_comparing :: proc(parent: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) {
+    log(.Debug, "Call to resolve_expr_comparing")
+    
+    ok, left_child := resolve_expr_additive(parent, iter)
+    if !ok do return false, nil
+    
+    for current_token(iter).type == .T_GREATER || 
+	    current_token(iter).type == .T_LESS || 
+		current_token(iter).type == .T_LESS_EQUAL || 
+		current_token(iter).type == .T_GREATER_EQUAL {
+
+        op_token := current_token(iter)
+        next_token(iter)
+        
+        expression_t: AstExpression
+        ok, expression_t.operator = get_operator_for_token(op_token, false)
+        if !ok do return false, nil
+        
+        ok, right_child := resolve_expr_additive(nil, iter)
+        if !ok do return false, nil
+        
+        binary_node := new(AstNode)
+        binary_node.type = .AST_EXPRESSION_BINARY
+        binary_node.value = expression_t
+        
+        append_ast_node(binary_node, left_child)
+        append_ast_node(binary_node, right_child)
+        
+        left_child = binary_node
+    }
+    
+    return true, left_child
+}
+
+@(private="file")
+resolve_expr_equal :: proc(parent: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) {
+    log(.Debug, "Call to resolve_expr_equal")
+    
+    ok, left_child := resolve_expr_comparing(parent, iter)
+    if !ok do return false, nil
+    
+    for current_token(iter).type == .T_EQUAL_EQUAL || 
+	    current_token(iter).type == .T_NOT_EQUAL {
+
+        op_token := current_token(iter)
+        next_token(iter)
+        
+        expression_t: AstExpression
+        ok, expression_t.operator = get_operator_for_token(op_token, false)
+        if !ok do return false, nil
+        
+        ok, right_child := resolve_expr_comparing(nil, iter)
+        if !ok do return false, nil
+        
+        binary_node := new(AstNode)
+        binary_node.type = .AST_EXPRESSION_BINARY
+        binary_node.value = expression_t
+        
+        append_ast_node(binary_node, left_child)
+        append_ast_node(binary_node, right_child)
+        
+        left_child = binary_node
+    }
+    
+    return true, left_child
+}
+
 @(private="package")
 resolve_expr :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) {
     log(.Debug, "Call to resolve_expr")
-    return resolve_expr_additive(root, iter)
+    return resolve_expr_equal(root, iter)
 }
 
 @(private="package")
