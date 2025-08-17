@@ -11,6 +11,7 @@ NodeType :: enum {
     AST_RETURN,
     AST_CONSTANT,
     AST_RETURN_STATEMENT,
+    AST_EXPR_STATEMENT,
     AST_EXPRESSION_CONSTANT,
     AST_EXPRESSION_UNARY,
     AST_EXPRESSION_BINARY,
@@ -79,6 +80,7 @@ Operator :: enum {
 	OP_BINARY_NOT_EQUAL,
 }
 
+@(private="package")
 append_ast_node :: proc(parent: ^AstNode, child: ^AstNode) {
 	append(&parent.childs, child)
 	child.parent = parent
@@ -351,49 +353,48 @@ resolve_expr :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) {
 
 @(private="package")
 resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) {
-	node := new(AstNode)
     statement_t: AstStatement
+	node := new(AstNode)
+	node.value = statement_t
 
-    token: ^Token
-    for i := 0; ; i += 1 {
-        node.value = statement_t
+	log(.Debug, "Currenttoken in resolve_statement:", fmt.tprintf("%s", current_token(iter).type))
 
-        if i != 0 do token = next_token(iter)
-        else do token = &iter.tokens[iter.i]
+	if current_token(iter) == nil {
+		log(.Error, "Ran out of tokens whilst resolving statement: Aborting")
+		return false, node
+	}
 
-        if token == nil {
-            log(.Error, "Ran out of tokens whilst resolving statement: Aborting")
-            return false, node
-        }
+	parsed_stmt := false
+	ok, expr_node := resolve_expr(node, iter)
+	if ok {
+		append_ast_node(node, expr_node)
+		node.type = .AST_EXPR_STATEMENT
+		parsed_stmt = true
+	} else {
+		log(.Debug, "NOT JUST A EXPRESSION parsed_stmt = false")
+	}
 
-        buf: [8]u8
-        strconv.itoa(buf[:], i)
-        switch i {
-            case 0:
-                if token.type != .T_RETURN_KEYWORD {
-                    log_error_with_token(token^, "Statement has to begin with return keyword")
-					cleanup_ast_node(node)
-                    return false, node
-                }
-                node.type = .AST_RETURN_STATEMENT
-            case 1:
-                ok, node_expression := resolve_expr(node, iter)
-                if !ok {
-					cleanup_ast_node(node)
-                    return false, node
-                }
-				append_ast_node(node, node_expression)
-                if current_token(iter).type != .T_SEMICOLON {
-                    log_error_with_token(token^, "Statement has to end with ;")
-					cleanup_ast_node(node)
-                    return false, node
-                }
-                
-                return true, node
-        }
-    }
+	if !parsed_stmt && current_token(iter).type == .T_RETURN_KEYWORD {
+		log(.Debug, "Trying to resolve a return expr")
+		next_token(iter)
+		ok, expr_node := resolve_expr(node, iter)
+		if !ok {
+			log_error_with_token(current_token(iter)^, "Return statement does not end with valid expression")
+			if node != nil do cleanup_ast_node(node)
+			return false, node
+		}
+		node.type = .AST_RETURN_STATEMENT
+		append_ast_node(node, expr_node)
+		parsed_stmt = true
+	}
 
-    return false, node
+	if current_token(iter).type != .T_SEMICOLON {
+		log_error_with_token(current_token(iter)^, "Statement has to end with ;")
+		if node != nil do cleanup_ast_node(node)
+		return false, node
+	}
+
+    return true, node
 }
 
 @(private="package")

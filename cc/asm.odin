@@ -141,18 +141,21 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
     statement_t := statement_node.value.(AstStatement)
 
     #partial switch statement_node.type {
-    case .AST_RETURN_STATEMENT:
+		case .AST_RETURN_STATEMENT: fallthrough
+		case .AST_EXPR_STATEMENT:
 			if len(statement_node.childs) <= 0 do return false
             ok := calc_value_of_expression(str_b, statement_node.childs[0])
             if !ok do return false
 
-            if function_label != "start" {
-                strings.write_string(str_b, "\tret \t\t; Returning\n")
-            } else {
-                strings.write_string(str_b, "\tmov rdi, rax\t; move calculated return value in rdi\n")
-                strings.write_string(str_b, "\tmov rax, 60\t; (sys_exit)\n")
-                strings.write_string(str_b, "\tsyscall\t\t; Shutting down program\n")
-            }
+			if statement_node.type == .AST_RETURN_STATEMENT {
+				if function_label != "start" {
+					strings.write_string(str_b, "\tret \t\t; Returning\n")
+				} else {
+					strings.write_string(str_b, "\tmov rdi, rax\t; move calculated return value in rdi\n")
+					strings.write_string(str_b, "\tmov rax, 60\t; (sys_exit)\n")
+					strings.write_string(str_b, "\tsyscall\t\t; Shutting down program\n")
+				}
+			}
     }
 
     return true
