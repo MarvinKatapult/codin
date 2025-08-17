@@ -85,6 +85,10 @@ log_ast :: proc(root: ^AstNode, x_offset: int = 0) {
             fmt.printfln("%s[%s] %s", YELLOW, root.type, RESET)
         case AstExpression:
             fmt.printfln("%s[%s] %s %s Parent: %s %s", YELLOW, root.type, v.value, v.operator, root.parent.type, RESET)
+		case AstDeclare:
+            fmt.printfln("%s[%s] int %s %s", YELLOW, root.type, v.identifier, RESET)
+		case AstAssignment:
+            fmt.printfln("%s[%s] %s = %s%s", YELLOW, root.type, v.identifier, v.value, RESET)
         case:
             fmt.printfln("%s[%s]%s", YELLOW, root.type, RESET)
     }

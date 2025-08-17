@@ -48,7 +48,7 @@ WHITESPACE :: "\t\n\v\f\r "
 cleanup_tokens :: proc(tokens: ^[dynamic]Token) {
 	log(.Debug, "Cleaning up Tokens")
     for token, i in tokens {
-		// log(.Debug, "Index:", fmt.tprintf("%d", i), " Value:", token.value);
+		log(.Debug, "Index:", fmt.tprintf("%d", i), " Value:", token.value);
         delete(token.value)
     }
     delete(tokens^)

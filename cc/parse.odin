@@ -11,6 +11,8 @@ NodeType :: enum {
     AST_RETURN,
     AST_CONSTANT,
     AST_RETURN_STATEMENT,
+    AST_VAR_DECLARE,
+    AST_VAR_ASSIGNMENT,
     AST_EXPR_STATEMENT,
     AST_EXPRESSION_CONSTANT,
     AST_EXPRESSION_UNARY,
@@ -22,6 +24,8 @@ AstValue :: union {
     AstFunction,
     AstStatement,
     AstExpression,
+    AstDeclare,
+    AstAssignment,
 }
 
 @(private="package")
@@ -54,6 +58,17 @@ AstStatement :: struct {
 AstExpression :: struct {
     value: string,
     operator: Operator,
+}
+
+@(private="package")
+AstDeclare :: struct {
+    identifier: string,
+}
+
+@(private="package")
+AstAssignment :: struct {
+    identifier: string,
+    value: string,
 }
 
 @(private="file")
@@ -120,6 +135,19 @@ cleanup_ast_expression :: proc(expression_t: AstExpression) {
 }
 
 @(private="package")
+cleanup_ast_assignment :: proc(expression_t: AstAssignment) {
+    log(.Debug, "Cleaning AstAssignment")
+    delete(expression_t.value)
+    delete(expression_t.identifier)
+}
+
+@(private="package")
+cleanup_ast_declare :: proc(expression_t: AstDeclare) {
+    log(.Debug, "Cleaning AstDeclare")
+    delete(expression_t.identifier)
+}
+
+@(private="package")
 cleanup_ast_node :: proc(root: ^AstNode) {
     for &child in root.childs {
         log(.Debug, "Deleting Child of type: ", fmt.tprintf("%s", child.type))
@@ -132,6 +160,10 @@ cleanup_ast_node :: proc(root: ^AstNode) {
             cleanup_ast_statement(v)
         case AstExpression:
             cleanup_ast_expression(v)
+        case AstAssignment:
+            cleanup_ast_assignment(v)
+        case AstDeclare:
+            cleanup_ast_declare(v)
     }
     if (root.childs != nil) do delete(root.childs)
 	free(root)
@@ -352,10 +384,30 @@ resolve_expr :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) {
 }
 
 @(private="package")
+resolving_assignment :: proc(root: ^AstNode, iter: ^TokenIter, identifier: string) -> bool {
+	next_token(iter)
+	if current_token(iter).type != .T_INT_LITERAL {
+		return false
+	}
+	
+	assignment_node := new(AstNode)
+	assignment_node.type = .AST_VAR_ASSIGNMENT
+	assignment_t: AstAssignment
+	assignment_t.identifier = strings.clone(identifier)
+	assignment_t.value = strings.clone(current_token(iter).value)
+	assignment_node.value = assignment_t
+
+	append_ast_node(root, assignment_node)
+
+	return true
+}
+
+@(private="package")
 resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) {
     statement_t: AstStatement
 	node := new(AstNode)
 	node.value = statement_t
+	parsed_stmt := false
 
 	log(.Debug, "Currenttoken in resolve_statement:", fmt.tprintf("%s", current_token(iter).type))
 
@@ -364,14 +416,10 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 		return false, node
 	}
 
-	parsed_stmt := false
 	ok, expr_node := resolve_expr(node, iter)
 	if ok {
 		append_ast_node(node, expr_node)
 		node.type = .AST_EXPR_STATEMENT
-		parsed_stmt = true
-	} else {
-		log(.Debug, "NOT JUST A EXPRESSION parsed_stmt = false")
 	}
 
 	if !parsed_stmt && current_token(iter).type == .T_RETURN_KEYWORD {
@@ -386,6 +434,30 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 		node.type = .AST_RETURN_STATEMENT
 		append_ast_node(node, expr_node)
 		parsed_stmt = true
+	}
+
+	if !parsed_stmt && current_token(iter).type == .T_INT_KEYWORD {
+		next_token(iter)
+		if current_token(iter).type != .T_IDENTIFIER {
+			log_error_with_token(current_token(iter)^, "Expected identifier after int keyword")
+			if node != nil do cleanup_ast_node(node)
+			return false, node
+		}
+
+		identifier := current_token(iter).value
+		declare_node := new(AstNode)
+		declare_node.type = .AST_VAR_DECLARE
+		declare_node.value = (AstDeclare){strings.clone(identifier)}
+		append_ast_node(node, declare_node)
+
+		next_token(iter)
+		if current_token(iter).type == .T_ASSIGNMENT {
+			if !resolving_assignment(declare_node, iter, identifier) {
+				if node != nil do cleanup_ast_node(node)
+				return false, node
+			}
+		}
+		next_token(iter)
 	}
 
 	if current_token(iter).type != .T_SEMICOLON {
