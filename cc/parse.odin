@@ -418,6 +418,7 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 
 	ok, expr_node := resolve_expr(node, iter)
 	if ok {
+		log(.Debug, "Resolved standalone expr!")
 		append_ast_node(node, expr_node)
 		node.type = .AST_EXPR_STATEMENT
 	}
@@ -437,7 +438,9 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 	}
 
 	if !parsed_stmt && current_token(iter).type == .T_INT_KEYWORD {
+		log(.Debug, "Trying to resolve variable declaration!")
 		next_token(iter)
+		parsed_stmt = true
 		if current_token(iter).type != .T_IDENTIFIER {
 			log_error_with_token(current_token(iter)^, "Expected identifier after int keyword")
 			if node != nil do cleanup_ast_node(node)
@@ -445,17 +448,32 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 		}
 
 		identifier := current_token(iter).value
-		declare_node := new(AstNode)
-		declare_node.type = .AST_VAR_DECLARE
-		declare_node.value = (AstDeclare){strings.clone(identifier)}
-		append_ast_node(node, declare_node)
+		node.type = .AST_VAR_DECLARE
+		node.value = (AstDeclare){strings.clone(identifier)}
 
 		next_token(iter)
 		if current_token(iter).type == .T_ASSIGNMENT {
-			if !resolving_assignment(declare_node, iter, identifier) {
+			log(.Debug, "Trying to resolve variable assignment!")
+			if !resolving_assignment(node, iter, identifier) {
 				if node != nil do cleanup_ast_node(node)
 				return false, node
 			}
+		}
+	}
+
+	if !parsed_stmt && current_token(iter).type == .T_IDENTIFIER {
+		node.type = .AST_VAR_ASSIGNMENT
+		log(.Debug, "Trying to resolve variable assignment!")
+		identifier := current_token(iter).value
+		next_token(iter)
+		if current_token(iter).type != .T_ASSIGNMENT {
+			if node != nil do cleanup_ast_node(node)
+			return false, node
+		}
+
+		if !resolving_assignment(node, iter, identifier) {
+			if node != nil do cleanup_ast_node(node)
+			return false, node
 		}
 		next_token(iter)
 	}
