@@ -11,6 +11,8 @@ NodeType :: enum {
     AST_RETURN,
     AST_CONSTANT,
     AST_RETURN_STATEMENT,
+    AST_DECLARE_STATEMENT,
+    AST_ASSIGNMENT_STATEMENT,
     AST_VAR_DECLARE,
     AST_VAR_ASSIGNMENT,
     AST_EXPR_STATEMENT,
@@ -24,8 +26,6 @@ AstValue :: union {
     AstFunction,
     AstStatement,
     AstExpression,
-    AstDeclare,
-    AstAssignment,
 }
 
 @(private="package")
@@ -52,23 +52,14 @@ AstDataType :: enum {
 @(private="package")
 AstStatement :: struct {
 	return_value: string,
+    identifier: string,
+	value: string
 }
 
 @(private="package")
 AstExpression :: struct {
     value: string,
     operator: Operator,
-}
-
-@(private="package")
-AstDeclare :: struct {
-    identifier: string,
-}
-
-@(private="package")
-AstAssignment :: struct {
-    identifier: string,
-    value: string,
 }
 
 @(private="file")
@@ -126,25 +117,14 @@ cleanup_ast_function :: proc(function_t: AstFunction) {
 cleanup_ast_statement :: proc(statement_t: AstStatement) {
     log(.Debug, "Cleaning AstStatement")
 	delete(statement_t.return_value)
+    delete(statement_t.value)
+    delete(statement_t.identifier)
 }
 
 @(private="package")
 cleanup_ast_expression :: proc(expression_t: AstExpression) {
     log(.Debug, "Cleaning AstExpression")
     delete(expression_t.value)
-}
-
-@(private="package")
-cleanup_ast_assignment :: proc(expression_t: AstAssignment) {
-    log(.Debug, "Cleaning AstAssignment")
-    delete(expression_t.value)
-    delete(expression_t.identifier)
-}
-
-@(private="package")
-cleanup_ast_declare :: proc(expression_t: AstDeclare) {
-    log(.Debug, "Cleaning AstDeclare")
-    delete(expression_t.identifier)
 }
 
 @(private="package")
@@ -160,10 +140,6 @@ cleanup_ast_node :: proc(root: ^AstNode) {
             cleanup_ast_statement(v)
         case AstExpression:
             cleanup_ast_expression(v)
-        case AstAssignment:
-            cleanup_ast_assignment(v)
-        case AstDeclare:
-            cleanup_ast_declare(v)
     }
     if (root.childs != nil) do delete(root.childs)
 	free(root)
@@ -389,15 +365,13 @@ resolving_assignment :: proc(root: ^AstNode, iter: ^TokenIter, identifier: strin
 	if current_token(iter).type != .T_INT_LITERAL {
 		return false
 	}
-	
-	assignment_node := new(AstNode)
-	assignment_node.type = .AST_VAR_ASSIGNMENT
-	assignment_t: AstAssignment
-	assignment_t.identifier = strings.clone(identifier)
-	assignment_t.value = strings.clone(current_token(iter).value)
-	assignment_node.value = assignment_t
 
-	append_ast_node(root, assignment_node)
+	ok, node := resolve_expr(root, iter)
+	if !ok {
+		log(.Error, "Could not resolve expression")
+		return false
+	}
+	append_ast_node(root, node)
 
 	return true
 }
@@ -420,6 +394,7 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 	if ok {
 		log(.Debug, "Resolved standalone expr!")
 		append_ast_node(node, expr_node)
+		parsed_stmt = true
 		node.type = .AST_EXPR_STATEMENT
 	}
 
@@ -449,19 +424,28 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 
 		identifier := current_token(iter).value
 		node.type = .AST_VAR_DECLARE
-		node.value = (AstDeclare){strings.clone(identifier)}
+		statement_t.identifier = strings.clone(identifier)
+		node.value = statement_t
+
+		assignment_node := new(AstNode)
+		assignment_node.type = .AST_ASSIGNMENT_STATEMENT
+		statement_t: AstStatement
+		statement_t.identifier = strings.clone(identifier)
+		assignment_node.value = statement_t
 
 		next_token(iter)
 		if current_token(iter).type == .T_ASSIGNMENT {
 			log(.Debug, "Trying to resolve variable assignment!")
-			if !resolving_assignment(node, iter, identifier) {
+			if !resolving_assignment(assignment_node, iter, identifier) {
 				if node != nil do cleanup_ast_node(node)
 				return false, node
 			}
 		}
+		append_ast_node(node, assignment_node)
 	}
 
 	if !parsed_stmt && current_token(iter).type == .T_IDENTIFIER {
+		parsed_stmt = true
 		node.type = .AST_VAR_ASSIGNMENT
 		log(.Debug, "Trying to resolve variable assignment!")
 		identifier := current_token(iter).value
@@ -475,16 +459,16 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 			if node != nil do cleanup_ast_node(node)
 			return false, node
 		}
-		next_token(iter)
 	}
 
+	log(.Debug, "Token before Semicolon: ", current_token(iter).value)
 	if current_token(iter).type != .T_SEMICOLON {
 		log_error_with_token(current_token(iter)^, "Statement has to end with ;")
 		if node != nil do cleanup_ast_node(node)
 		return false, node
 	}
 
-    return true, node
+    return parsed_stmt, node
 }
 
 @(private="package")
