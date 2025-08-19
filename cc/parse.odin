@@ -107,6 +107,12 @@ current_token :: proc(iter: ^TokenIter) -> ^Token {
 }
 
 @(private="package")
+prev_token :: proc(iter: ^TokenIter) -> ^Token {
+	if iter.i - 1 < 0 do panic("prev_token called with first token!")
+	return &iter.tokens[iter.i - 1]
+}
+
+@(private="package")
 cleanup_ast_function :: proc(function_t: AstFunction) {
     log(.Debug, "Cleaning AstFunction")
     delete(function_t.identifier)
@@ -361,6 +367,10 @@ resolve_expr :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) {
 
 @(private="package")
 resolving_assignment :: proc(root: ^AstNode, iter: ^TokenIter, identifier: string) -> bool {
+	statement_t: AstStatement
+	statement_t.identifier = strings.clone(prev_token(iter).value)
+	root.value = statement_t
+	root.type = .AST_VAR_ASSIGNMENT
 	next_token(iter)
 	if current_token(iter).type != .T_INT_LITERAL {
 		return false
@@ -427,34 +437,29 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 		statement_t.identifier = strings.clone(identifier)
 		node.value = statement_t
 
-		assignment_node := new(AstNode)
-		assignment_node.type = .AST_ASSIGNMENT_STATEMENT
-		statement_t: AstStatement
-		statement_t.identifier = strings.clone(identifier)
-		assignment_node.value = statement_t
-
 		next_token(iter)
 		if current_token(iter).type == .T_ASSIGNMENT {
+			assignment_node := new(AstNode)
 			log(.Debug, "Trying to resolve variable assignment!")
 			if !resolving_assignment(assignment_node, iter, identifier) {
 				if node != nil do cleanup_ast_node(node)
 				return false, node
 			}
+			append_ast_node(node, assignment_node)
 		}
-		append_ast_node(node, assignment_node)
 	}
 
 	if !parsed_stmt && current_token(iter).type == .T_IDENTIFIER {
 		parsed_stmt = true
 		node.type = .AST_VAR_ASSIGNMENT
 		log(.Debug, "Trying to resolve variable assignment!")
-		identifier := current_token(iter).value
 		next_token(iter)
 		if current_token(iter).type != .T_ASSIGNMENT {
 			if node != nil do cleanup_ast_node(node)
 			return false, node
 		}
 
+		identifier := current_token(iter).value
 		if !resolving_assignment(node, iter, identifier) {
 			if node != nil do cleanup_ast_node(node)
 			return false, node
