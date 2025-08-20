@@ -148,6 +148,7 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
             if !ok do return false
 
 			if statement_node.type == .AST_RETURN_STATEMENT {
+				strings.write_string(str_b, "\tleave\t\t; Restore old BasePointer and Free Stack memory\n")
 				if function_label != "start" {
 					strings.write_string(str_b, "\tret \t\t; Returning\n")
 				} else {
@@ -171,6 +172,9 @@ generate_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNode) 
 
     strings.write_string(str_b, function_label)
     strings.write_string(str_b, ":\n")
+
+	strings.write_string(str_b, "\tpush rbp\t; Save old base pointer\n")
+	strings.write_string(str_b, "\tmov rbp, rsp\t; Set new Base pointer\n")
 
     for child in function_node.childs {
         if !generate_for_statement(str_b, child, function_label) do return false

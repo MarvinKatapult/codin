@@ -19,6 +19,7 @@ NodeType :: enum {
     AST_EXPRESSION_CONSTANT,
     AST_EXPRESSION_UNARY,
     AST_EXPRESSION_BINARY,
+    AST_EXPRESSION_VARIABLE,
 }
 
 @(private="package")
@@ -208,6 +209,17 @@ resolve_expr_primary :: proc(iter: ^TokenIter) -> (bool, ^AstNode) {
         next_token(iter)
         return true, ret
     }
+
+	if current_token(iter).type == .T_IDENTIFIER {
+		ret := new(AstNode)
+		expression_t: AstExpression
+		expression_t.value = strings.clone(current_token(iter).value)
+		ret.value = expression_t
+		ret.type = .AST_EXPRESSION_VARIABLE
+
+		next_token(iter)
+		return true, ret
+	}
     
 	if is_token_unary_operator(current_token(iter)) {
 		ret := new(AstNode)
@@ -400,14 +412,6 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 		return false, node
 	}
 
-	ok, expr_node := resolve_expr(node, iter)
-	if ok {
-		log(.Debug, "Resolved standalone expr!")
-		append_ast_node(node, expr_node)
-		parsed_stmt = true
-		node.type = .AST_EXPR_STATEMENT
-	}
-
 	if !parsed_stmt && current_token(iter).type == .T_RETURN_KEYWORD {
 		log(.Debug, "Trying to resolve a return expr")
 		next_token(iter)
@@ -465,6 +469,17 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 			return false, node
 		}
 	}
+
+	if !parsed_stmt {
+		ok, expr_node := resolve_expr(node, iter)
+		if ok {
+			log(.Debug, "Resolved standalone expr!")
+			append_ast_node(node, expr_node)
+			parsed_stmt = true
+			node.type = .AST_EXPR_STATEMENT
+		}
+	}
+
 
 	log(.Debug, "Token before Semicolon: ", current_token(iter).value)
 	if current_token(iter).type != .T_SEMICOLON {
