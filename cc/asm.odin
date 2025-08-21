@@ -37,16 +37,16 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 		case .OP_BINARY_PLUS:
 			strings.write_string(str_b, "\tadd rax, rdi\t; Adding rax and rdi\n")
 		case .OP_BINARY_MINUS:
-			strings.write_string(str_b, "\tsub rdi, rax\t\t; Subtracting rdi from rax\n")
-			strings.write_string(str_b, "\tmov rax, rdi\t\t; Moving result in rax\n")
+			strings.write_string(str_b, "\tsub rdi, rax\t; Subtracting rdi from rax\n")
+			strings.write_string(str_b, "\tmov rax, rdi\t; Moving result in rax\n")
 		case .OP_BINARY_MULT:
 			strings.write_string(str_b, "\tmul rdi\t\t; Multiplying rdi with rax\n")
 		case .OP_BINARY_DIV:
 			strings.write_string(str_b, "\tmov rdx, rdi	; Moving rdi to rdx\n")
 			strings.write_string(str_b, "\tmov rcx, rax	; Moving rax to rcx\n")
 			strings.write_string(str_b, "\tmov rax, rdx	; moving rdx in rax\n")
-			strings.write_string(str_b, "\tcqo			 ; Expand RAX to RAX:RDX 128 Bit Register\n")
-			strings.write_string(str_b, "\tidiv rcx		; RAX = RAX / RCX\n")
+			strings.write_string(str_b, "\tcqo\t\t; Expand RAX to RAX:RDX 128 Bit Register\n")
+			strings.write_string(str_b, "\tidiv rcx\t; RAX = RAX / RCX\n")
 		case .OP_BINARY_LESS:
 			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax < rdi\n")
 			strings.write_string(str_b, "\tsetl al\t\t; Set al to 1 if true\n")
@@ -136,7 +136,8 @@ calc_value_of_expression :: proc(str_b: ^strings.Builder, expression_node: ^AstN
 }
 
 @(private="file")
-generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, function_label: string) -> bool {
+generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
+							   function_label: string, scope: ^map[string]string, rbp_offset: int) -> bool {
 
 	statement_t := statement_node.value.(AstStatement)
 
@@ -157,9 +158,35 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 					strings.write_string(str_b, "\tsyscall\t\t; Shutting down program\n")
 				}
 			}
+		case .AST_VAR_DECLARE:
+			// Declare things
+			strings.write_string(str_b, "\tsub rbp, 4\t; Allocate memory on the stack\n")
+			statement_t := statement_node.value.(AstStatement)
+			rbp_offset := rbp_offset - 4
+			scope[statement_t.identifier] = strings.clone(fmt.tprintf("[rbp%d]", rbp_offset))
+			if len(statement_node.childs) > 0 {
+				generate_for_statement(str_b, statement_node.childs[0], function_label, scope, rbp_offset)
+			}
+		case .AST_VAR_ASSIGNMENT:
+			if len(statement_node.childs) <= 0 do return false
+			ok := calc_value_of_expression(str_b, statement_node.childs[0])
+			if !ok do return false
+
+			statement_t := statement_node.value.(AstStatement)
+			strings.write_string(str_b, "\tmov ")
+			strings.write_string(str_b, scope[statement_t.identifier])
+			strings.write_string(str_b, ", ") 
+			strings.write_string(str_b, "rax; mov calculated value into variable\n")
 	}
 
 	return true
+}
+
+delete_scope :: proc(s: ^map[string]string) {
+	for str in s {
+		delete(s[str])
+	}
+	delete(s^)
 }
 
 @(private="file")
@@ -176,8 +203,11 @@ generate_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNode) 
 	strings.write_string(str_b, "\tpush rbp\t; Save old base pointer\n")
 	strings.write_string(str_b, "\tmov rbp, rsp\t; Set new Base pointer\n")
 
+	scope: map[string]string
+	defer delete_scope(&scope)
+
 	for child in function_node.childs {
-		if !generate_for_statement(str_b, child, function_label) do return false
+		if !generate_for_statement(str_b, child, function_label, &scope, 0) do return false
 	}
 	
 	return true
