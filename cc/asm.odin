@@ -7,20 +7,20 @@ import "core:sys/linux/"
 
 @(private="file")
 append_fasm_header :: proc(str_b: ^strings.Builder) -> bool {
-    strings.write_string(str_b,
-        "format ELF64 executable 3\n"
-    )
-    strings.write_string(str_b,
-        "entry start\n"
-    )
-    strings.write_string(str_b,
-        "\n"
-    )
-    strings.write_string(str_b,
-        "segment readable executable\n"
-    )
+	strings.write_string(str_b,
+		"format ELF64 executable 3\n"
+	)
+	strings.write_string(str_b,
+		"entry start\n"
+	)
+	strings.write_string(str_b,
+		"\n"
+	)
+	strings.write_string(str_b,
+		"segment readable executable\n"
+	)
 
-    return true
+	return true
 }
 
 @(private="file")
@@ -42,11 +42,11 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 		case .OP_BINARY_MULT:
 			strings.write_string(str_b, "\tmul rdi\t\t; Multiplying rdi with rax\n")
 		case .OP_BINARY_DIV:
-			strings.write_string(str_b, "\tmov rdx, rdi    ; Moving rdi to rdx\n")
-			strings.write_string(str_b, "\tmov rcx, rax    ; Moving rax to rcx\n")
-			strings.write_string(str_b, "\tmov rax, rdx    ; moving rdx in rax\n")
-			strings.write_string(str_b, "\tcqo             ; Expand RAX to RAX:RDX 128 Bit Register\n")
-			strings.write_string(str_b, "\tidiv rcx        ; RAX = RAX / RCX\n")
+			strings.write_string(str_b, "\tmov rdx, rdi	; Moving rdi to rdx\n")
+			strings.write_string(str_b, "\tmov rcx, rax	; Moving rax to rcx\n")
+			strings.write_string(str_b, "\tmov rax, rdx	; moving rdx in rax\n")
+			strings.write_string(str_b, "\tcqo			 ; Expand RAX to RAX:RDX 128 Bit Register\n")
+			strings.write_string(str_b, "\tidiv rcx		; RAX = RAX / RCX\n")
 		case .OP_BINARY_LESS:
 			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax < rdi\n")
 			strings.write_string(str_b, "\tsetl al\t\t; Set al to 1 if true\n")
@@ -138,14 +138,14 @@ calc_value_of_expression :: proc(str_b: ^strings.Builder, expression_node: ^AstN
 @(private="file")
 generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, function_label: string) -> bool {
 
-    statement_t := statement_node.value.(AstStatement)
+	statement_t := statement_node.value.(AstStatement)
 
-    #partial switch statement_node.type {
+	#partial switch statement_node.type {
 		case .AST_RETURN_STATEMENT: fallthrough
 		case .AST_EXPR_STATEMENT:
 			if len(statement_node.childs) <= 0 do return false
-            ok := calc_value_of_expression(str_b, statement_node.childs[0])
-            if !ok do return false
+			ok := calc_value_of_expression(str_b, statement_node.childs[0])
+			if !ok do return false
 
 			if statement_node.type == .AST_RETURN_STATEMENT {
 				strings.write_string(str_b, "\tleave\t\t; Restore old BasePointer and Free Stack memory\n")
@@ -157,54 +157,54 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 					strings.write_string(str_b, "\tsyscall\t\t; Shutting down program\n")
 				}
 			}
-    }
+	}
 
-    return true
+	return true
 }
 
 @(private="file")
 generate_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNode) -> bool {
 
-    function_t := function_node.value.(AstFunction)
+	function_t := function_node.value.(AstFunction)
 
-    function_label := function_t.identifier
-    if function_label == "main" do function_label = "start"
+	function_label := function_t.identifier
+	if function_label == "main" do function_label = "start"
 
-    strings.write_string(str_b, function_label)
-    strings.write_string(str_b, ":\n")
+	strings.write_string(str_b, function_label)
+	strings.write_string(str_b, ":\n")
 
 	strings.write_string(str_b, "\tpush rbp\t; Save old base pointer\n")
 	strings.write_string(str_b, "\tmov rbp, rsp\t; Set new Base pointer\n")
 
-    for child in function_node.childs {
-        if !generate_for_statement(str_b, child, function_label) do return false
-    }
-    
-    return true
+	for child in function_node.childs {
+		if !generate_for_statement(str_b, child, function_label) do return false
+	}
+	
+	return true
 }
 
 @(private="file")
 generate_for_ast_node :: proc(str_b: ^strings.Builder, node: ^AstNode) -> bool {
-    #partial switch node.type {
-        case .AST_PROGRAM:
-            for child in node.childs {
-                if !generate_for_ast_node(str_b, child) do return false
-            }
-        case .AST_FUNCTION:
-            if !generate_for_function(str_b, node) do return false
-    }
-    return true
+	#partial switch node.type {
+		case .AST_PROGRAM:
+			for child in node.childs {
+				if !generate_for_ast_node(str_b, child) do return false
+			}
+		case .AST_FUNCTION:
+			if !generate_for_function(str_b, node) do return false
+	}
+	return true
 }
 
 @(private="package")
 generate_asm :: proc(ast: ^AstNode) -> string {
-    str_b := strings.builder_make()
-    defer strings.builder_destroy(&str_b)
+	str_b := strings.builder_make()
+	defer strings.builder_destroy(&str_b)
 
-    if !append_fasm_header(&str_b) do return ""
-    if !generate_for_ast_node(&str_b, ast) do return ""
+	if !append_fasm_header(&str_b) do return ""
+	if !generate_for_ast_node(&str_b, ast) do return ""
 
-    return strings.clone(strings.to_string(str_b))
+	return strings.clone(strings.to_string(str_b))
 }
 
 @(private="package")

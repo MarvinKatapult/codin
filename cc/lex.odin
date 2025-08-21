@@ -8,37 +8,37 @@ import "core:fmt"
 
 @(private="package")
 TokenType :: enum {
-    T_OPEN_BRACE,
-    T_CLOSE_BRACE,
-    T_OPEN_PARANTHESIS,
-    T_CLOSE_PARANTHESIS,
-    T_SEMICOLON,
-    T_RETURN_KEYWORD,
-    T_INT_KEYWORD,
-    T_VOID_KEYWORD,
-    T_IDENTIFIER,
-    T_INT_LITERAL,
+	T_OPEN_BRACE,
+	T_CLOSE_BRACE,
+	T_OPEN_PARANTHESIS,
+	T_CLOSE_PARANTHESIS,
+	T_SEMICOLON,
+	T_RETURN_KEYWORD,
+	T_INT_KEYWORD,
+	T_VOID_KEYWORD,
+	T_IDENTIFIER,
+	T_INT_LITERAL,
 	T_PLUS,
-    T_MINUS,
-    T_STAR,
-    T_FSLASH,
-    T_TILDE,
-    T_EXCLAMATION,
-    T_LESS,
-    T_GREATER,
-    T_LESS_EQUAL,
-    T_GREATER_EQUAL,
-    T_ASSIGNMENT,
-    T_EQUAL_EQUAL,
-    T_NOT_EQUAL,
+	T_MINUS,
+	T_STAR,
+	T_FSLASH,
+	T_TILDE,
+	T_EXCLAMATION,
+	T_LESS,
+	T_GREATER,
+	T_LESS_EQUAL,
+	T_GREATER_EQUAL,
+	T_ASSIGNMENT,
+	T_EQUAL_EQUAL,
+	T_NOT_EQUAL,
 }
 
 @(private="package")
 Token :: struct {
-    value: string,
-    type: TokenType,
-    x: u32,
-    y: u32,
+	value: string,
+	type: TokenType,
+	x: u32,
+	y: u32,
 }
 
 @(private="package")
@@ -47,162 +47,162 @@ WHITESPACE :: "\t\n\v\f\r "
 @(private="package")
 cleanup_tokens :: proc(tokens: ^[dynamic]Token) {
 	log(.Debug, "Cleaning up Tokens")
-    for token, i in tokens {
+	for token, i in tokens {
 		log(.Debug, "Index:", fmt.tprintf("%d", i), " Value:", token.value);
-        delete(token.value)
-    }
-    delete(tokens^)
+		delete(token.value)
+	}
+	delete(tokens^)
 }
 
 @(private="file")
 is_special_symbol :: proc(symbol: rune) -> (bool, TokenType) {
-    switch (symbol) {
-        case '{':
-            return true, TokenType.T_OPEN_BRACE
-        case '}':
-            return true, TokenType.T_CLOSE_BRACE
-        case '(':
-            return true, TokenType.T_OPEN_PARANTHESIS
-        case ')':
-            return true, TokenType.T_CLOSE_PARANTHESIS
-        case ';':
-            return true, TokenType.T_SEMICOLON
-        case '!':
-            return true, TokenType.T_EXCLAMATION
-        case '~':
-            return true, TokenType.T_TILDE
-        case '-':
-            return true, TokenType.T_MINUS
-        case '+':
-            return true, TokenType.T_PLUS
-        case '*':
-            return true, TokenType.T_STAR
-        case '/':
-            return true, TokenType.T_FSLASH
-        case '<':
-            return true, TokenType.T_LESS
-        case '>':
-            return true, TokenType.T_GREATER
-        case '=':
-            return true, TokenType.T_ASSIGNMENT
-    }
+	switch (symbol) {
+		case '{':
+			return true, TokenType.T_OPEN_BRACE
+		case '}':
+			return true, TokenType.T_CLOSE_BRACE
+		case '(':
+			return true, TokenType.T_OPEN_PARANTHESIS
+		case ')':
+			return true, TokenType.T_CLOSE_PARANTHESIS
+		case ';':
+			return true, TokenType.T_SEMICOLON
+		case '!':
+			return true, TokenType.T_EXCLAMATION
+		case '~':
+			return true, TokenType.T_TILDE
+		case '-':
+			return true, TokenType.T_MINUS
+		case '+':
+			return true, TokenType.T_PLUS
+		case '*':
+			return true, TokenType.T_STAR
+		case '/':
+			return true, TokenType.T_FSLASH
+		case '<':
+			return true, TokenType.T_LESS
+		case '>':
+			return true, TokenType.T_GREATER
+		case '=':
+			return true, TokenType.T_ASSIGNMENT
+	}
 
-    return false, nil
+	return false, nil
 }
 
 @(private="file")
 is_keyword :: proc(s: string) -> (bool, TokenType) {
-    switch (s) {
-        case "return":
-            return true, TokenType.T_RETURN_KEYWORD
-        case "int":
-            return true, TokenType.T_INT_KEYWORD
-        case "void":
-            return true, TokenType.T_VOID_KEYWORD
-    }
-    return false, TokenType.T_IDENTIFIER
+	switch (s) {
+		case "return":
+			return true, TokenType.T_RETURN_KEYWORD
+		case "int":
+			return true, TokenType.T_INT_KEYWORD
+		case "void":
+			return true, TokenType.T_VOID_KEYWORD
+	}
+	return false, TokenType.T_IDENTIFIER
 }
 
 @(private="file")
 check_for_keyword :: proc(s: string, tokens: ^[dynamic]Token, x: u32, y: u32) -> bool {
-    if (len(strings.trim(s, WHITESPACE)) > 0) {
-        token: Token
-        is_keyword, type := is_keyword(s)
+	if (len(strings.trim(s, WHITESPACE)) > 0) {
+		token: Token
+		is_keyword, type := is_keyword(s)
 
-        token.value = strings.clone_from(s)
-        token.type = type
-        token.x = x - u32(len(s))
-        token.y = y
+		token.value = strings.clone_from(s)
+		token.type = type
+		token.x = x - u32(len(s))
+		token.y = y
 
-        append(tokens, token)
-        return true
-    }
-    return false
+		append(tokens, token)
+		return true
+	}
+	return false
 }
 
 @(private="file")
 check_for_int_literal :: proc(s: string, tokens: ^[dynamic]Token, x: u32, y: u32) -> bool {
-    _, is_int := strconv.parse_int(s)
-    if (is_int) {
-        token: Token
-        token.type = TokenType.T_INT_LITERAL
-        token.value = strings.clone_from(s)
-        token.x = x - u32(len(s))
-        token.y = y
-        append(tokens, token)
-        return true
-    }
-    return false
+	_, is_int := strconv.parse_int(s)
+	if (is_int) {
+		token: Token
+		token.type = TokenType.T_INT_LITERAL
+		token.value = strings.clone_from(s)
+		token.x = x - u32(len(s))
+		token.y = y
+		append(tokens, token)
+		return true
+	}
+	return false
 }
 
 @(private="file")
 look_ahead_one :: proc(buf: string, index: int, c1: u8, c2: u8) -> bool {
-    c := buf[index]
-    return (len(buf) >= index && buf[index] == c1 && buf[index + 1] == c2)
+	c := buf[index]
+	return (len(buf) >= index && buf[index] == c1 && buf[index + 1] == c2)
 }
 
 @(private="file")
 look_back_one :: proc(buf: string, index: int, c1: u8, c2: u8) -> bool {
-    c := buf[index]
-    return (index > 0 && buf[index - 1] == c1 && buf[index] == c2)
+	c := buf[index]
+	return (index > 0 && buf[index - 1] == c1 && buf[index] == c2)
 }
 
 @(private="package")
 lex :: proc(filename: string) -> [dynamic]Token {
-    ret: [dynamic]Token
+	ret: [dynamic]Token
 
-    filedata, ok := os.read_entire_file(filename)
-    if !ok {
-        fmt.println("Cant read file!")
-        return nil
-    }
-    defer delete(filedata)
+	filedata, ok := os.read_entire_file(filename)
+	if !ok {
+		fmt.println("Cant read file!")
+		return nil
+	}
+	defer delete(filedata)
 
-    file_str := string(filedata)
+	file_str := string(filedata)
 
-    str_b := strings.builder_make()
-    defer strings.builder_destroy(&str_b)
-    token: Token
-    x: u32 = 1
-    y: u32 = 1
-    in_line_comment: bool = false
-    comment: bool = false
-    for c, i in file_str {
-        defer x += 1
+	str_b := strings.builder_make()
+	defer strings.builder_destroy(&str_b)
+	token: Token
+	x: u32 = 1
+	y: u32 = 1
+	in_line_comment: bool = false
+	comment: bool = false
+	for c, i in file_str {
+		defer x += 1
 
-        last_token := i == len(file_str) - 1
-        if last_token {
-            strings.write_rune(&str_b, c)
-        }
+		last_token := i == len(file_str) - 1
+		if last_token {
+			strings.write_rune(&str_b, c)
+		}
 
-        if look_ahead_one(file_str, i, '/', '/') {
-            in_line_comment = true
-            continue
-        }
+		if look_ahead_one(file_str, i, '/', '/') {
+			in_line_comment = true
+			continue
+		}
 
-        if look_ahead_one(file_str, i, '/', '*') {
-            comment = true
-            continue
-        }
-        
-        if look_back_one(file_str, i, '*', '/') {
-            comment = false
-            continue
-        }
+		if look_ahead_one(file_str, i, '/', '*') {
+			comment = true
+			continue
+		}
+		
+		if look_back_one(file_str, i, '*', '/') {
+			comment = false
+			continue
+		}
 
 
-        buf := strings.trim(strings.to_string(str_b), WHITESPACE)
+		buf := strings.trim(strings.to_string(str_b), WHITESPACE)
 
-        if (c == '\n') {
-            y += 1
-            x = 0
-            in_line_comment = false
-        }
+		if (c == '\n') {
+			y += 1
+			x = 0
+			in_line_comment = false
+		}
 
-        if in_line_comment || comment do continue
+		if in_line_comment || comment do continue
 
-        is_space := strings.is_space(c)
-        special_symbol, type := is_special_symbol(c)
+		is_space := strings.is_space(c)
+		special_symbol, type := is_special_symbol(c)
 
 		if c == '=' {
 			last_token := &ret[len(ret)-1]
@@ -230,32 +230,32 @@ lex :: proc(filename: string) -> [dynamic]Token {
 			}
 		}
 
-        if is_space && len(buf) == 0 {
-            strings.builder_reset(&str_b)
-            continue
-        }
+		if is_space && len(buf) == 0 {
+			strings.builder_reset(&str_b)
+			continue
+		}
 
-        parse_token := is_space || special_symbol || last_token
+		parse_token := is_space || special_symbol || last_token
 
-        if parse_token {
-            // If buffer is still filled, identify string
-            if check_for_int_literal(buf, &ret, x, y) do strings.builder_reset(&str_b)
-            else if check_for_keyword(buf, &ret, x, y) do strings.builder_reset(&str_b)
-        }
+		if parse_token {
+			// If buffer is still filled, identify string
+			if check_for_int_literal(buf, &ret, x, y) do strings.builder_reset(&str_b)
+			else if check_for_keyword(buf, &ret, x, y) do strings.builder_reset(&str_b)
+		}
 
-        // Is rune special symbol that is a token itself?
-        if special_symbol {
-            // Append special symbol as token
-            token.type = type
-            token.value = utf8.runes_to_string([]rune{c})
-            token.x = x
-            token.y = y
-            append(&ret, token)
-            continue
-        }
+		// Is rune special symbol that is a token itself?
+		if special_symbol {
+			// Append special symbol as token
+			token.type = type
+			token.value = utf8.runes_to_string([]rune{c})
+			token.x = x
+			token.y = y
+			append(&ret, token)
+			continue
+		}
 
-        strings.write_rune(&str_b, c)
-    }
+		strings.write_rune(&str_b, c)
+	}
 
-    return ret
+	return ret
 }
