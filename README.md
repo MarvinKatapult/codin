@@ -13,6 +13,8 @@ It's not finished and even if it was, it wouldn't be good, but that's not the go
 ## Highest level code we can compile
 ```c
 int main(void) {
-    return (3 + 2) == (3 < 2) >= 5 * 2 / 2 != 0;
+    int a = (3 - 2) * 2;
+    int b = a * 5;
+    return a == b < 5;
 }
 ```
