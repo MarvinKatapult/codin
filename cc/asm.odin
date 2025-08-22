@@ -80,7 +80,6 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 @(private="file")
 generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode, scope: ^map[string]string) -> bool {
 	expression_t := expression_node.value.(AstExpression)
-	log(.Debug, "Calling generate_asm_for_expr with Expressiontype:", fmt.tprintf("%s", expression_node.type))
 	#partial switch expression_node.type {
 		case .AST_EXPRESSION_VARIABLE:
 			if len(expression_node.childs) != 0 {
@@ -133,7 +132,6 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 			return generate_asm_for_operator(str_b, expression_node)
 	}
 
-	log(.Debug, "Partially generated asm:\n", strings.to_string(str_b^))
 	log(.Error, "Expression must be constant or unary expression!")
 
 	return false
@@ -143,7 +141,6 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 calc_value_of_expression :: proc(str_b: ^strings.Builder, expression_node: ^AstNode, scope: ^map[string]string) -> bool {
 
 	if !generate_asm_for_expr(str_b, expression_node, scope) {
-		log(.Error, "Generating asm for expression was not successful")
 		return false
 	}
 
