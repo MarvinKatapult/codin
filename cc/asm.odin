@@ -81,7 +81,7 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode, scope: ^map[string]string) -> bool {
 	expression_t := expression_node.value.(AstExpression)
 	#partial switch expression_node.type {
-		case .AST_EXPRESSION_VARIABLE:
+		case .AST_EXPR_VARIABLE:
 			if len(expression_node.childs) != 0 {
 				log(.Error, "Constant Expression Type cannot have childs")
 				return false
@@ -94,7 +94,7 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 			strings.write_string(str_b, scope[expression_t.value])
 			strings.write_string(str_b, " ; moving value of variable directly into rax\n\n")
 			return true
-		case .AST_EXPRESSION_CONSTANT:
+		case .AST_EXPR_CONSTANT:
 			if len(expression_node.childs) != 0 {
 				log(.Error, "Constant Expression Type cannot have childs")
 				return false
@@ -103,7 +103,7 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 			strings.write_string(str_b, expression_t.value)
 			strings.write_string(str_b, "\t; moving value of expression directly into rax\n\n")
 			return true
-		case .AST_EXPRESSION_UNARY:
+		case .AST_EXPR_UNARY:
 			if len(expression_node.childs) != 1 {
 				log(.Error, "Unary Expression Type must have exactly 1 child")
 				return false
@@ -113,7 +113,7 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 
 			return generate_asm_for_operator(str_b, expression_node)
 			
-		case .AST_EXPRESSION_BINARY:
+		case .AST_EXPR_BINARY:
 			if len(expression_node.childs) != 2 {
 				log(.Error, "Binary Expression Type must have exactly 2 childs")
 				return false
