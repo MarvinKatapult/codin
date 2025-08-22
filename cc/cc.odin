@@ -48,7 +48,7 @@ compile_file :: proc(filepath: string) -> bool {
 
 	log(.Proto, assembler, cc_prefix = false)
 
-	compile_asm(assembler, "main.fasm", "my_program") or_return
+	if !compile_asm(assembler, "main.fasm", "my_program") do return false
 
 	return true
 }

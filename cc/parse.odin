@@ -113,14 +113,12 @@ prev_token :: proc(iter: ^TokenIter) -> ^Token {
 
 @(private="package")
 cleanup_ast_function :: proc(function_t: AstFunction) {
-	log(.Debug, "Cleaning AstFunction")
 	delete(function_t.identifier)
 	delete(function_t.params)
 }
 
 @(private="package")
 cleanup_ast_statement :: proc(statement_t: AstStatement) {
-	log(.Debug, "Cleaning AstStatement")
 	delete(statement_t.return_value)
 	delete(statement_t.value)
 	delete(statement_t.identifier)
@@ -128,14 +126,12 @@ cleanup_ast_statement :: proc(statement_t: AstStatement) {
 
 @(private="package")
 cleanup_ast_expression :: proc(expression_t: AstExpression) {
-	log(.Debug, "Cleaning AstExpression")
 	delete(expression_t.value)
 }
 
 @(private="package")
 cleanup_ast_node :: proc(root: ^AstNode) {
 	for &child in root.childs {
-		log(.Debug, "Deleting Child of type: ", fmt.tprintf("%s", child.type))
 		cleanup_ast_node(child)
 	}
 	switch v in root.value {
@@ -182,7 +178,6 @@ is_token_unary_operator :: proc(token: ^Token) -> bool {
 
 @(private="file")
 resolve_expr_primary :: proc(iter: ^TokenIter) -> (bool, ^AstNode) {
-	log(.Debug, "Call to resolve_expr_primary with Token:", fmt.tprintf("%s", current_token(iter).type))
 	
 	if current_token(iter).type == .T_OPEN_PARANTHESIS {
 		next_token(iter)
@@ -208,7 +203,6 @@ resolve_expr_primary :: proc(iter: ^TokenIter) -> (bool, ^AstNode) {
 		return true, ret
 	}
 
-	log(.Debug, "Looking for identifier with token:", current_token(iter).value)
 	if current_token(iter).type == .T_IDENTIFIER {
 		ret := new(AstNode)
 		expression_t: AstExpression
@@ -244,7 +238,6 @@ resolve_expr_primary :: proc(iter: ^TokenIter) -> (bool, ^AstNode) {
 
 @(private="file")
 resolve_expr_dot :: proc(parent: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) {
-	log(.Debug, "Call to resolve_expr_dot")
 	
 	ok, left_child := resolve_expr_primary(iter)
 	if !ok do return false, nil
@@ -275,7 +268,6 @@ resolve_expr_dot :: proc(parent: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode)
 
 @(private="file")
 resolve_expr_additive :: proc(parent: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) {
-	log(.Debug, "Call to resolve_expr_additive")
 	
 	ok, left_child := resolve_expr_dot(parent, iter)
 	if !ok do return false, nil
@@ -306,7 +298,6 @@ resolve_expr_additive :: proc(parent: ^AstNode, iter: ^TokenIter) -> (bool, ^Ast
 
 @(private="file")
 resolve_expr_comparing :: proc(parent: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) {
-	log(.Debug, "Call to resolve_expr_comparing")
 	
 	ok, left_child := resolve_expr_additive(parent, iter)
 	if !ok do return false, nil
@@ -341,7 +332,6 @@ resolve_expr_comparing :: proc(parent: ^AstNode, iter: ^TokenIter) -> (bool, ^As
 
 @(private="file")
 resolve_expr_equal :: proc(parent: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) {
-	log(.Debug, "Call to resolve_expr_equal")
 	
 	ok, left_child := resolve_expr_comparing(parent, iter)
 	if !ok do return false, nil
@@ -374,7 +364,6 @@ resolve_expr_equal :: proc(parent: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNod
 
 @(private="package")
 resolve_expr :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) {
-	log(.Debug, "Call to resolve_expr")
 	return resolve_expr_equal(root, iter)
 }
 
@@ -403,15 +392,12 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 	node.value = statement_t
 	parsed_stmt := false
 
-	log(.Debug, "Currenttoken in resolve_statement:", fmt.tprintf("%s", current_token(iter).type))
-
 	if current_token(iter) == nil {
 		log(.Error, "Ran out of tokens whilst resolving statement: Aborting")
 		return false, node
 	}
 
 	if !parsed_stmt && current_token(iter).type == .T_RETURN_KEYWORD {
-		log(.Debug, "Trying to resolve a return expr")
 		next_token(iter)
 		ok, expr_node := resolve_expr(node, iter)
 		if !ok {
@@ -425,7 +411,6 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 	}
 
 	if !parsed_stmt && current_token(iter).type == .T_INT_KEYWORD {
-		log(.Debug, "Trying to resolve variable declaration!")
 		next_token(iter)
 		parsed_stmt = true
 		if current_token(iter).type != .T_IDENTIFIER {
@@ -442,7 +427,6 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 		next_token(iter)
 		if current_token(iter).type == .T_ASSIGNMENT {
 			assignment_node := new(AstNode)
-			log(.Debug, "Trying to resolve variable assignment!")
 			if !resolving_assignment(assignment_node, iter, identifier) {
 				if node != nil do cleanup_ast_node(node)
 				return false, node
@@ -454,9 +438,9 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 	if !parsed_stmt && current_token(iter).type == .T_IDENTIFIER {
 		parsed_stmt = true
 		node.type = .AST_VAR_ASSIGNMENT
-		log(.Debug, "Trying to resolve variable assignment!")
 		next_token(iter)
 		if current_token(iter).type != .T_ASSIGNMENT {
+			log_error_with_token(current_token(iter)^, "Expected = Token while got ")
 			if node != nil do cleanup_ast_node(node)
 			return false, node
 		}
@@ -471,7 +455,6 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 	if !parsed_stmt {
 		ok, expr_node := resolve_expr(node, iter)
 		if ok {
-			log(.Debug, "Resolved standalone expr!")
 			append_ast_node(node, expr_node)
 			parsed_stmt = true
 			node.type = .AST_EXPR_STATEMENT
@@ -479,7 +462,6 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 	}
 
 
-	log(.Debug, "Token before Semicolon: ", current_token(iter).value)
 	if current_token(iter).type != .T_SEMICOLON {
 		log_error_with_token(current_token(iter)^, "Statement has to end with ;")
 		if node != nil do cleanup_ast_node(node)

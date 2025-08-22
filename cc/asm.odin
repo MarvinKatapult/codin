@@ -88,6 +88,10 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 				return false
 			}
 			strings.write_string(str_b, "\tmov qword rax, ")
+			if expression_t.value not_in scope {
+				log(.Error, "Variable ", expression_t.value, " not declared!")
+				return false
+			}
 			strings.write_string(str_b, scope[expression_t.value])
 			strings.write_string(str_b, " ; moving value of variable directly into rax\n\n")
 			return true
@@ -170,6 +174,11 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 				}
 			}
 		case .AST_VAR_DECLARE:
+			if statement_t.identifier in scope {
+				log(.Error, "Variale redefinition!")
+				return false
+			}
+
 			// Declare things
 			strings.write_string(str_b, "\tsub rsp, ")
 			strings.write_int(str_b,	INT_BYTE_SIZE)
@@ -178,7 +187,9 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 			rbp_offset^ = rbp_offset^ - INT_BYTE_SIZE
 			scope[statement_t.identifier] = strings.clone(fmt.tprintf("[rbp%d]", rbp_offset^))
 			if len(statement_node.childs) > 0 {
-				generate_for_statement(str_b, statement_node.childs[0], function_label, scope, rbp_offset)
+				if !generate_for_statement(str_b, statement_node.childs[0], function_label, scope, rbp_offset) {
+					return false
+				}
 			}
 		case .AST_VAR_ASSIGNMENT:
 			if len(statement_node.childs) <= 0 do return false
@@ -187,6 +198,10 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 
 			statement_t := statement_node.value.(AstStatement)
 			strings.write_string(str_b, "\tmov qword ")
+			if statement_t.identifier not_in scope {
+				log(.Error, "Variable ", statement_t.identifier, " not declared!")
+				return false
+			}
 			strings.write_string(str_b, scope[statement_t.identifier])
 			strings.write_string(str_b, ", ") 
 			strings.write_string(str_b, "rax ; mov calculated value into variable: ")
