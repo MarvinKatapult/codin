@@ -5,6 +5,8 @@ import "core:fmt"
 import "core:os/os2"
 import "core:sys/linux/"
 
+INT_BYTE_SIZE :: 8
+
 @(private="file")
 append_fasm_header :: proc(str_b: ^strings.Builder) -> bool {
 	strings.write_string(str_b,
@@ -76,10 +78,19 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 }
 
 @(private="file")
-generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode) -> bool {
+generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode, scope: ^map[string]string) -> bool {
 	expression_t := expression_node.value.(AstExpression)
 	log(.Debug, "Calling generate_asm_for_expr with Expressiontype:", fmt.tprintf("%s", expression_node.type))
 	#partial switch expression_node.type {
+		case .AST_EXPRESSION_VARIABLE:
+			if len(expression_node.childs) != 0 {
+				log(.Error, "Constant Expression Type cannot have childs")
+				return false
+			}
+			strings.write_string(str_b, "\tmov qword rax, ")
+			strings.write_string(str_b, scope[expression_t.value])
+			strings.write_string(str_b, " ; moving value of variable directly into rax\n\n")
+			return true
 		case .AST_EXPRESSION_CONSTANT:
 			if len(expression_node.childs) != 0 {
 				log(.Error, "Constant Expression Type cannot have childs")
@@ -95,7 +106,7 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 				return false
 			}
 			child := expression_node.childs[0]
-			if !generate_asm_for_expr(str_b, child) do return false
+			if !generate_asm_for_expr(str_b, child, scope) do return false
 
 			return generate_asm_for_operator(str_b, expression_node)
 			
@@ -106,12 +117,12 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 			}
 
 			valuel := expression_node.childs[0]
-			if !generate_asm_for_expr(str_b, valuel) do return false
+			if !generate_asm_for_expr(str_b, valuel, scope) do return false
 		
 			strings.write_string(str_b, "\tpush rax\t; Push to stack\n\n")
 
 			valuer := expression_node.childs[1]
-			if !generate_asm_for_expr(str_b, valuer) do return false
+			if !generate_asm_for_expr(str_b, valuer, scope) do return false
 
 			strings.write_string(str_b, "\tpop rdi\t\t; Popping Value to rdi off stack\n\n")
 
@@ -125,9 +136,9 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 }
 
 @(private="file")
-calc_value_of_expression :: proc(str_b: ^strings.Builder, expression_node: ^AstNode) -> bool {
+calc_value_of_expression :: proc(str_b: ^strings.Builder, expression_node: ^AstNode, scope: ^map[string]string) -> bool {
 
-	if !generate_asm_for_expr(str_b, expression_node) {
+	if !generate_asm_for_expr(str_b, expression_node, scope) {
 		log(.Error, "Generating asm for expression was not successful")
 		return false
 	}
@@ -137,7 +148,7 @@ calc_value_of_expression :: proc(str_b: ^strings.Builder, expression_node: ^AstN
 
 @(private="file")
 generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
-							   function_label: string, scope: ^map[string]string, rbp_offset: int) -> bool {
+							   function_label: string, scope: ^map[string]string, rbp_offset: ^int) -> bool {
 
 	statement_t := statement_node.value.(AstStatement)
 
@@ -145,7 +156,7 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 		case .AST_RETURN_STATEMENT: fallthrough
 		case .AST_EXPR_STATEMENT:
 			if len(statement_node.childs) <= 0 do return false
-			ok := calc_value_of_expression(str_b, statement_node.childs[0])
+			ok := calc_value_of_expression(str_b, statement_node.childs[0], scope)
 			if !ok do return false
 
 			if statement_node.type == .AST_RETURN_STATEMENT {
@@ -160,23 +171,27 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 			}
 		case .AST_VAR_DECLARE:
 			// Declare things
-			strings.write_string(str_b, "\tsub rbp, 4\t; Allocate memory on the stack\n")
+			strings.write_string(str_b, "\tsub rsp, ")
+			strings.write_int(str_b,	INT_BYTE_SIZE)
+			strings.write_string(str_b, "\t; Allocate memory on the stack\n\n")
 			statement_t := statement_node.value.(AstStatement)
-			rbp_offset := rbp_offset - 4
-			scope[statement_t.identifier] = strings.clone(fmt.tprintf("[rbp%d]", rbp_offset))
+			rbp_offset^ = rbp_offset^ - INT_BYTE_SIZE
+			scope[statement_t.identifier] = strings.clone(fmt.tprintf("[rbp%d]", rbp_offset^))
 			if len(statement_node.childs) > 0 {
 				generate_for_statement(str_b, statement_node.childs[0], function_label, scope, rbp_offset)
 			}
 		case .AST_VAR_ASSIGNMENT:
 			if len(statement_node.childs) <= 0 do return false
-			ok := calc_value_of_expression(str_b, statement_node.childs[0])
+			ok := calc_value_of_expression(str_b, statement_node.childs[0], scope)
 			if !ok do return false
 
 			statement_t := statement_node.value.(AstStatement)
-			strings.write_string(str_b, "\tmov ")
+			strings.write_string(str_b, "\tmov qword ")
 			strings.write_string(str_b, scope[statement_t.identifier])
 			strings.write_string(str_b, ", ") 
-			strings.write_string(str_b, "rax; mov calculated value into variable\n")
+			strings.write_string(str_b, "rax ; mov calculated value into variable: ")
+			strings.write_string(str_b, statement_t.identifier)
+			strings.write_string(str_b, "\n\n")
 	}
 
 	return true
@@ -201,13 +216,14 @@ generate_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNode) 
 	strings.write_string(str_b, ":\n")
 
 	strings.write_string(str_b, "\tpush rbp\t; Save old base pointer\n")
-	strings.write_string(str_b, "\tmov rbp, rsp\t; Set new Base pointer\n")
+	strings.write_string(str_b, "\tmov rbp, rsp\t; Set new Base pointer\n\n")
 
 	scope: map[string]string
 	defer delete_scope(&scope)
 
+	rbp_offset: int = 0
 	for child in function_node.childs {
-		if !generate_for_statement(str_b, child, function_label, &scope, 0) do return false
+		if !generate_for_statement(str_b, child, function_label, &scope, &rbp_offset) do return false
 	}
 	
 	return true

@@ -182,7 +182,7 @@ is_token_unary_operator :: proc(token: ^Token) -> bool {
 
 @(private="file")
 resolve_expr_primary :: proc(iter: ^TokenIter) -> (bool, ^AstNode) {
-	log(.Debug, "Call to resolve_expr_primary")
+	log(.Debug, "Call to resolve_expr_primary with Token:", fmt.tprintf("%s", current_token(iter).type))
 	
 	if current_token(iter).type == .T_OPEN_PARANTHESIS {
 		next_token(iter)
@@ -208,6 +208,7 @@ resolve_expr_primary :: proc(iter: ^TokenIter) -> (bool, ^AstNode) {
 		return true, ret
 	}
 
+	log(.Debug, "Looking for identifier with token:", current_token(iter).value)
 	if current_token(iter).type == .T_IDENTIFIER {
 		ret := new(AstNode)
 		expression_t: AstExpression
@@ -235,6 +236,8 @@ resolve_expr_primary :: proc(iter: ^TokenIter) -> (bool, ^AstNode) {
 		append_ast_node(ret, node)
 		return true, ret
 	}
+
+	log_error_with_token(current_token(iter)^, "Could not resolve primary expression")
 	
 	return false, nil
 }
@@ -382,9 +385,6 @@ resolving_assignment :: proc(root: ^AstNode, iter: ^TokenIter, identifier: strin
 	root.value = statement_t
 	root.type = .AST_VAR_ASSIGNMENT
 	next_token(iter)
-	if current_token(iter).type != .T_INT_LITERAL {
-		return false
-	}
 
 	ok, node := resolve_expr(root, iter)
 	if !ok {
