@@ -386,7 +386,7 @@ resolving_assignment :: proc(root: ^AstNode, iter: ^TokenIter, identifier: strin
 }
 
 @(private="package")
-resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) {
+resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (^AstNode, bool) {
 	statement_t: AstStatement
 	node := new(AstNode)
 	node.value = statement_t
@@ -394,7 +394,7 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 
 	if current_token(iter) == nil {
 		log(.Error, "Ran out of tokens whilst resolving statement: Aborting")
-		return false, node
+		return node, false
 	}
 
 	if !parsed_stmt && current_token(iter).type == .T_RETURN_KEYWORD {
@@ -403,7 +403,7 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 		if !ok {
 			log_error_with_token(current_token(iter)^, "Return statement does not end with valid expression")
 			if node != nil do cleanup_ast_node(node)
-			return false, node
+			return node, false
 		}
 		node.type = .AST_RETURN_STATEMENT
 		append_ast_node(node, expr_node)
@@ -416,7 +416,7 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 		if current_token(iter).type != .T_IDENTIFIER {
 			log_error_with_token(current_token(iter)^, "Expected identifier after int keyword")
 			if node != nil do cleanup_ast_node(node)
-			return false, node
+			return node, false
 		}
 
 		identifier := current_token(iter).value
@@ -429,7 +429,7 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 			assignment_node := new(AstNode)
 			if !resolving_assignment(assignment_node, iter, identifier) {
 				if node != nil do cleanup_ast_node(node)
-				return false, node
+				return node, false
 			}
 			append_ast_node(node, assignment_node)
 		}
@@ -442,13 +442,13 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 		if current_token(iter).type != .T_ASSIGNMENT {
 			log_error_with_token(current_token(iter)^, "Expected = Token while got ")
 			if node != nil do cleanup_ast_node(node)
-			return false, node
+			return node, false
 		}
 
 		identifier := current_token(iter).value
 		if !resolving_assignment(node, iter, identifier) {
 			if node != nil do cleanup_ast_node(node)
-			return false, node
+			return node, false
 		}
 	}
 
@@ -465,106 +465,98 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) 
 	if current_token(iter).type != .T_SEMICOLON {
 		log_error_with_token(current_token(iter)^, "Statement has to end with ;")
 		if node != nil do cleanup_ast_node(node)
-		return false, node
+		return node, false
 	}
 
-	return parsed_stmt, node
+	return node, parsed_stmt
 }
 
 @(private="package")
-resolve_function :: proc(root: ^AstNode, iter: ^TokenIter) -> (bool, ^AstNode) {
-
-	node := new(AstNode)
+resolve_function :: proc(root: ^AstNode, iter: ^TokenIter) -> (node: ^AstNode, ok: bool) {
+	node = new(AstNode)
 	node.type = .AST_FUNCTION
 
 	function_t: AstFunction
+
+	// int
+	if current_token(iter).type != .T_INT_KEYWORD {
+		log_error_with_token(current_token(iter)^, "Token is not a valid return type")
+		return node, false
+	}
+	function_t.ret_type = .Int
+
+	next_token(iter)
 	
-	for i := 0; ; i += 1 {
-		token: ^Token
-		node.value = function_t
+	// int foo
+	if current_token(iter).type != .T_IDENTIFIER {
+		log_error_with_token(current_token(iter)^, "Token is not a valid identifier")
+		return node, false
+	}
+	function_t.identifier = strings.clone(current_token(iter).value)
 
-		buf: [8]u8
-		strconv.itoa(buf[:], i)
+	next_token(iter)
 
-		if i != 0 do token = next_token(iter)
-		else do token = &iter.tokens[iter.i]
-
-		if token == nil {
-			log(.Error, "Ran out of tokens whilst resolving function: Aborting!")
-			return false, node
-		}
-
-		switch i {
-			case 0:
-				if token.type != .T_INT_KEYWORD {
-					log_error_with_token(token^, "Token is not a valid return type")
-					return false, node
-				}
-				function_t.ret_type = .Int
-
-			case 1:
-				if token.type != .T_IDENTIFIER {
-					log_error_with_token(token^, "Token is not a valid identifier")
-					return false, node
-				}
-				function_t.identifier = strings.clone(token.value)
-			case 2:
-				if token.type != .T_OPEN_PARANTHESIS {
-					log_error_with_token(token^, "Expected \'(\' after function identifier")
-					return false, node
-				}
-			case 3:
-				if token.type != .T_VOID_KEYWORD {
-					log_error_with_token(token^, "Function parameters have to be void for now" )
-					return false, node
-				}
-				function_t.params = strings.clone(token.value)
-			case 4:
-				if token.type != .T_CLOSE_PARANTHESIS {
-					log_error_with_token(token^, "Expected \')\' after function parameter")
-					return false, node
-				}
-			case 5:
-				if token.type != .T_OPEN_BRACE {
-					log_error_with_token(token^, "Expected \'{\' after function parameters")
-					return false, node
-				}
-			case 6..<len(iter.tokens):
-				if token.type != .T_CLOSE_BRACE {
-					ok, statement_node := resolve_statement(node, iter)
-					if !ok {
-						return false, node
-					}
-					append_ast_node(node, statement_node)
-				} else {
-					return true, node
-				}
-		}
-
+	// int foo(
+	if current_token(iter).type != .T_OPEN_PARANTHESIS {
+		log_error_with_token(current_token(iter)^, "Expected \'(\' after function identifier")
+		return node, false
 	}
 
-	return false, node
+	next_token(iter)
+
+	// int foo(void
+	if current_token(iter).type != .T_VOID_KEYWORD {
+		log_error_with_token(current_token(iter)^, "Function parameters have to be void for now" )
+		return node, false
+	}
+	function_t.params = strings.clone(current_token(iter).value)
+
+	next_token(iter)
+
+	// int foo(void)
+	if current_token(iter).type != .T_CLOSE_PARANTHESIS {
+		log_error_with_token(current_token(iter)^, "Expected \')\' after function parameter")
+		return node, false
+	}
+
+	next_token(iter)
+
+	// int foo(void) {
+	if current_token(iter).type != .T_OPEN_BRACE {
+		log_error_with_token(current_token(iter)^, "Expected \'{\' after function parameters")
+		return node, false
+	}
+
+	next_token(iter)
+
+	// int foo(void) {...}
+	for current_token(iter).type != .T_CLOSE_BRACE {
+		statement_node := resolve_statement(node, iter) or_return
+
+		append_ast_node(node, statement_node)
+		next_token(iter)
+	} 
+
+	node.value = function_t
+	return node, true
 }
 
 @(private="package")
 build_ast :: proc(tokens: []Token) -> (bool, ^AstNode) {
 	root := new(AstNode)
 
-	iter: TokenIter
-	iter.tokens = tokens
-	token := &iter.tokens[0]
-	for iter.i < len(iter.tokens) {
-		if token == nil {
-			log(.Error, "Ran out of Tokens to build ast with: Aborting")
-		}
+	iter: TokenIter = {
+		tokens = tokens
+	}
 
-		ok, node := resolve_function(root, &iter)
+	for iter.i < len(iter.tokens) {
+		node, ok := resolve_function(root, &iter)
 		append_ast_node(root, node)
 		if !ok {
 			log(.Error, "Could not resolve function: Aborting")
 			return false, root
 		}
-		token := next_token(&iter)
+		next_token(&iter)
 	}
 
 	return true, root

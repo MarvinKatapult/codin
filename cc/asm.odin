@@ -163,7 +163,7 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 			if statement_node.type == .AST_RETURN_STATEMENT {
 				strings.write_string(str_b, "\tleave\t\t; Restore old BasePointer and Free Stack memory\n")
 				if function_label != "start" {
-					strings.write_string(str_b, "\tret \t\t; Returning\n")
+					strings.write_string(str_b, "\tret \t\t; Returning\n\n")
 				} else {
 					strings.write_string(str_b, "\tmov rdi, rax\t; move calculated return value in rdi\n")
 					strings.write_string(str_b, "\tmov rax, 60\t; (sys_exit)\n")
