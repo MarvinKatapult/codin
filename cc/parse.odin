@@ -91,9 +91,10 @@ append_ast_node :: proc(parent: ^AstNode, child: ^AstNode) {
 }
 
 @(private="file")
-next_token :: proc(iter: ^TokenIter) -> ^Token {
+next_token :: proc(iter: ^TokenIter, place := #caller_location, print_error := true) -> ^Token {
 	iter.i += 1
 	if iter.i >= len(iter.tokens) {
+		if print_error do log(.Error, "Ran out of token", place = place)
 		return nil
 	}
 	return &iter.tokens[iter.i]
@@ -101,7 +102,18 @@ next_token :: proc(iter: ^TokenIter) -> ^Token {
 
 @(private="package")
 current_token :: proc(iter: ^TokenIter) -> ^Token {
+	if iter.i >= len(iter.tokens) {
+		return nil
+	}
 	return &iter.tokens[iter.i]
+}
+
+token_left :: proc(iter: ^TokenIter, place := #caller_location) -> bool {
+	if current_token(iter) == nil {
+		log(.Error, "Ran out of tokens whilst resolving statement: Aborting", place = place)
+		return false
+	}
+	return true
 }
 
 @(private="package")
@@ -148,17 +160,17 @@ cleanup_ast_node :: proc(root: ^AstNode) {
 get_operator_for_token :: proc(token: ^Token, unary: bool) -> (Operator, bool) {
 	#partial switch token.type {
 		case .T_MINUS:			return unary ? .OP_UNARY_MINUS : .OP_BINARY_MINUS, true
-		case .T_PLUS:			return .OP_BINARY_PLUS, true
-		case .T_STAR:			return .OP_BINARY_MULT, true
-		case .T_FSLASH:			return .OP_BINARY_DIV, true
-		case .T_TILDE:			return .OP_BIT_NEGATION, true
-		case .T_EXCLAMATION:	return .OP_LOGICAL_NOT, true
-		case .T_GREATER:		return .OP_BINARY_GREATER, true
+		case .T_PLUS:			return .OP_BINARY_PLUS,			 true
+		case .T_STAR:			return .OP_BINARY_MULT,			 true
+		case .T_FSLASH:			return .OP_BINARY_DIV,			 true
+		case .T_TILDE:			return .OP_BIT_NEGATION,		 true
+		case .T_EXCLAMATION:	return .OP_LOGICAL_NOT,			 true
+		case .T_GREATER:		return .OP_BINARY_GREATER,		 true
 		case .T_GREATER_EQUAL:	return .OP_BINARY_GREATER_EQUAL, true
-		case .T_LESS:			return .OP_BINARY_LESS, true
-		case .T_LESS_EQUAL:		return .OP_BINARY_LESS_EQUAL, true
-		case .T_EQUAL_EQUAL:	return .OP_BINARY_EQUAL, true
-		case .T_NOT_EQUAL:		return .OP_BINARY_NOT_EQUAL, true
+		case .T_LESS:			return .OP_BINARY_LESS,			 true
+		case .T_LESS_EQUAL:		return .OP_BINARY_LESS_EQUAL,	 true
+		case .T_EQUAL_EQUAL:	return .OP_BINARY_EQUAL,		 true
+		case .T_NOT_EQUAL:		return .OP_BINARY_NOT_EQUAL,	 true
 		case: return nil, false
 	}
 }
@@ -166,9 +178,9 @@ get_operator_for_token :: proc(token: ^Token, unary: bool) -> (Operator, bool) {
 @(private="file")
 is_token_unary_operator :: proc(token: ^Token) -> bool {
 	#partial switch token.type {
-		case .T_EXCLAMATION: fallthrough
-		case .T_TILDE	  : fallthrough
-		case .T_MINUS	  :
+		case .T_EXCLAMATION : fallthrough
+		case .T_TILDE		: fallthrough
+		case .T_MINUS		:
 			return true
 	}
 	return false
@@ -177,75 +189,96 @@ is_token_unary_operator :: proc(token: ^Token) -> bool {
 @(private="file")
 resolve_expr_primary :: proc(iter: ^TokenIter) -> (node: ^AstNode, ok: bool) {
 	
+	node = new(AstNode)
+	token_left(iter) or_return
+
+	// ()
 	if current_token(iter).type == .T_OPEN_PARANTHESIS {
-		next_token(iter)
-		node, ok = resolve_expr(nil, iter)
-		if !ok do return nil, false
-	   
+		if next_token(iter) == nil {
+			return node, false
+		}
+		node = resolve_expr(nil, iter) or_return
+
 		if current_token(iter).type != .T_CLOSE_PARANTHESIS {
 			log(.Error, "Expected ')' but found:", fmt.tprintf("%s", current_token(iter).type))
-			return nil, false
+			return node, false
 		}
-		next_token(iter)
+
+		if next_token(iter) == nil {
+			return node, false
+		}
 		return node, true
 	}
 
+	// 3, 4, 7
 	if current_token(iter).type == .T_INT_LITERAL {
-		ret := new(AstNode)
 		expression_t: AstExpression
 		expression_t.value = strings.clone(current_token(iter).value)
-		ret.value = expression_t
-		ret.type = .AST_EXPR_CONSTANT
+		node.value = expression_t
+		node.type = .AST_EXPR_CONSTANT
 		
-		next_token(iter)
-		return ret, true
+		if next_token(iter) == nil {
+			return node, false
+		}
+		return node, true
 	}
 
+	// foo
 	if current_token(iter).type == .T_IDENTIFIER {
-		ret := new(AstNode)
 		expression_t: AstExpression
 		expression_t.value = strings.clone(current_token(iter).value)
-		ret.value = expression_t
-		ret.type = .AST_EXPR_VARIABLE
+		node.value = expression_t
+		node.type = .AST_EXPR_VARIABLE
 
-		next_token(iter)
-		return ret, true
+		if next_token(iter) == nil {
+			return node, false
+		}
+		return node, true
 	}
 	
+	// ! ~ -
 	if is_token_unary_operator(current_token(iter)) {
-		ret := new(AstNode)
 		expression_t: AstExpression
-		ok: bool
 		expression_t.operator = get_operator_for_token(current_token(iter), true) or_return
 
-		ret.value = expression_t
-		ret.type = .AST_EXPR_UNARY
+		node.value = expression_t
+		node.type = .AST_EXPR_UNARY
 
-		next_token(iter)
-		node: ^AstNode
-		node = resolve_expr_primary(iter) or_return
-		append_ast_node(ret, node)
-		return ret, true
+		if next_token(iter) == nil {
+			return node, false
+		}
+		return resolve_expr_primary(iter)
 	}
 
 	log_error_with_token(current_token(iter)^, "Could not resolve primary expression")
-	
-	return nil, false
+
+	return node, false
 }
 
 @(private="file")
 resolve_expr_dot :: proc(parent: ^AstNode, iter: ^TokenIter) -> (left_child: ^AstNode, ok: bool) {
-	
-	left_child = resolve_expr_primary(iter) or_return
-	
+
+	left_child, ok = resolve_expr_primary(iter)
+	if !ok {
+		return left_child, false
+	}
+
+	token_left(iter) or_return 
+
+	// * /
 	for current_token(iter).type == .T_STAR || current_token(iter).type == .T_FSLASH {
 		op_token := current_token(iter)
-		next_token(iter)
+		if next_token(iter) == nil {
+			return left_child, false
+		}
 		
 		expression_t: AstExpression
 		expression_t.operator = get_operator_for_token(op_token, false) or_return
 		
-		right_child := resolve_expr_primary(iter) or_return
+		right_child, ok := resolve_expr_primary(iter)
+		if !ok {
+			return left_child, false
+		}
 		
 		binary_node := new(AstNode)
 		binary_node.type = .AST_EXPR_BINARY
@@ -263,11 +296,17 @@ resolve_expr_dot :: proc(parent: ^AstNode, iter: ^TokenIter) -> (left_child: ^As
 @(private="file")
 resolve_expr_additive :: proc(parent: ^AstNode, iter: ^TokenIter) -> (left_child: ^AstNode, ok: bool) {
 	
-	left_child = resolve_expr_dot(parent, iter) or_return
+	left_child, ok = resolve_expr_dot(parent, iter)
+	if !ok {
+		return left_child, ok
+	}
 	
+	// + -
 	for current_token(iter).type == .T_PLUS || current_token(iter).type == .T_MINUS {
 		op_token := current_token(iter)
-		next_token(iter)
+		if next_token(iter) == nil {
+			return left_child, false
+		}
 		
 		expression_t: AstExpression
 		expression_t.operator = get_operator_for_token(op_token, false) or_return
@@ -290,15 +329,21 @@ resolve_expr_additive :: proc(parent: ^AstNode, iter: ^TokenIter) -> (left_child
 @(private="file")
 resolve_expr_comparing :: proc(parent: ^AstNode, iter: ^TokenIter) -> (left_child: ^AstNode, ok: bool) {
 	
-	left_child = resolve_expr_additive(parent, iter) or_return
+	left_child, ok = resolve_expr_additive(parent, iter)
+	if !ok {
+		return left_child, ok
+	}
 	
+	// < <= >= >
 	for current_token(iter).type == .T_GREATER || 
 		current_token(iter).type == .T_LESS || 
 		current_token(iter).type == .T_LESS_EQUAL || 
 		current_token(iter).type == .T_GREATER_EQUAL {
 
 		op_token := current_token(iter)
-		next_token(iter)
+		if next_token(iter) == nil {
+			return left_child, false
+		}
 		
 		expression_t: AstExpression
 		expression_t.operator = get_operator_for_token(op_token, false) or_return
@@ -321,13 +366,19 @@ resolve_expr_comparing :: proc(parent: ^AstNode, iter: ^TokenIter) -> (left_chil
 @(private="file")
 resolve_expr_equal :: proc(parent: ^AstNode, iter: ^TokenIter) -> (left_child: ^AstNode, ok: bool) {
 	
-	left_child = resolve_expr_comparing(parent, iter) or_return
+	left_child, ok = resolve_expr_comparing(parent, iter)
+	if !ok {
+		return left_child, ok
+	}
 	
+	// == !=
 	for current_token(iter).type == .T_EQUAL_EQUAL || 
 		current_token(iter).type == .T_NOT_EQUAL {
 
 		op_token := current_token(iter)
-		next_token(iter)
+		if next_token(iter) == nil {
+			return left_child, ok
+		}
 		
 		expression_t: AstExpression
 		expression_t.operator = get_operator_for_token(op_token, false) or_return
@@ -353,90 +404,106 @@ resolve_expr :: proc(root: ^AstNode, iter: ^TokenIter) -> (^AstNode, bool) {
 }
 
 @(private="package")
-resolving_assignment :: proc(root: ^AstNode, iter: ^TokenIter, identifier: string) -> bool {
+resolving_assignment :: proc(root: ^AstNode, iter: ^TokenIter) -> bool {
 	statement_t: AstStatement
 	statement_t.identifier = strings.clone(prev_token(iter).value)
 	root.value = statement_t
 	root.type = .AST_VAR_ASSIGNMENT
-	next_token(iter)
+
+	if next_token(iter) == nil {
+		return false
+	}
 
 	node, ok := resolve_expr(root, iter)
+	append_ast_node(root, node)
 	if !ok {
 		log(.Error, "Could not resolve expression")
 		return false
 	}
-	append_ast_node(root, node)
 
 	return true
 }
 
 @(private="package")
-resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (^AstNode, bool) {
+resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (node: ^AstNode, ok: bool) {
+
 	statement_t: AstStatement
-	node := new(AstNode)
+	node = new(AstNode)
 	node.value = statement_t
+
 	parsed_stmt := false
 
-	if current_token(iter) == nil {
-		log(.Error, "Ran out of tokens whilst resolving statement: Aborting")
+	if !token_left(iter) {
 		return node, false
 	}
 
+	// Return statement
 	if !parsed_stmt && current_token(iter).type == .T_RETURN_KEYWORD {
-		next_token(iter)
+		if next_token(iter) == nil {
+			return node, false
+		}
 		expr_node, ok := resolve_expr(node, iter)
+		append_ast_node(node, expr_node)
+
 		if !ok {
 			log_error_with_token(current_token(iter)^, "Return statement does not end with valid expression")
-			if node != nil do cleanup_ast_node(node)
 			return node, false
 		}
+
 		node.type = .AST_RETURN_STATEMENT
-		append_ast_node(node, expr_node)
 		parsed_stmt = true
 	}
 
+	// Integer Declaration
 	if !parsed_stmt && current_token(iter).type == .T_INT_KEYWORD {
-		next_token(iter)
-		parsed_stmt = true
+		if next_token(iter) == nil {
+			return node, false
+		}
+
 		if current_token(iter).type != .T_IDENTIFIER {
 			log_error_with_token(current_token(iter)^, "Expected identifier after int keyword")
-			if node != nil do cleanup_ast_node(node)
 			return node, false
 		}
 
-		identifier := current_token(iter).value
+		statement_t.identifier = strings.clone(current_token(iter).value)
 		node.type = .AST_VAR_DECLARE
-		statement_t.identifier = strings.clone(identifier)
 		node.value = statement_t
 
-		next_token(iter)
+		if next_token(iter) == nil {
+			return node, false
+		}
+
 		if current_token(iter).type == .T_ASSIGNMENT {
 			assignment_node := new(AstNode)
-			if !resolving_assignment(assignment_node, iter, identifier) {
-				if node != nil do cleanup_ast_node(node)
+			append_ast_node(node, assignment_node)
+
+			if !resolving_assignment(assignment_node, iter) {
 				return node, false
 			}
-			append_ast_node(node, assignment_node)
 		}
+
+		parsed_stmt = true
 	}
 
+	// Variable Assignment
 	if !parsed_stmt && current_token(iter).type == .T_IDENTIFIER {
 		parsed_stmt = true
 		node.type = .AST_VAR_ASSIGNMENT
-		next_token(iter)
-		if current_token(iter).type != .T_ASSIGNMENT {
-			log_error_with_token(current_token(iter)^, "Expected = Token while got ")
-			if node != nil do cleanup_ast_node(node)
+		if next_token(iter) == nil {
 			return node, false
 		}
 
-		identifier := current_token(iter).value
-		if !resolving_assignment(node, iter, identifier) {
-			if node != nil do cleanup_ast_node(node)
+		if current_token(iter).type != .T_ASSIGNMENT {
+			log_error_with_token(current_token(iter)^, "Expected = Token while got ")
+			return node, false
+		}
+
+		if !resolving_assignment(node, iter) {
 			return node, false
 		}
 	}
 
+	// Standalone expression
 	if !parsed_stmt {
 		expr_node, ok := resolve_expr(node, iter)
 		if ok {
@@ -446,10 +513,9 @@ resolve_statement :: proc(root: ^AstNode, iter: ^TokenIter) -> (^AstNode, bool) 
 		}
 	}
 
-
+	// Statement ends with semicolon
 	if current_token(iter).type != .T_SEMICOLON {
 		log_error_with_token(current_token(iter)^, "Statement has to end with ;")
-		if node != nil do cleanup_ast_node(node)
 		return node, false
 	}
 
@@ -470,7 +536,9 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter) -> (node: ^AstNode, o
 	}
 	function_t.ret_type = .Int
 
-	next_token(iter)
+	if next_token(iter) == nil {
+		return node, false
+	}
 	
 	// int foo
 	if current_token(iter).type != .T_IDENTIFIER {
@@ -479,7 +547,9 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter) -> (node: ^AstNode, o
 	}
 	function_t.identifier = strings.clone(current_token(iter).value)
 
-	next_token(iter)
+	if next_token(iter) == nil {
+		return node, false
+	}
 
 	// int foo(
 	if current_token(iter).type != .T_OPEN_PARANTHESIS {
@@ -487,7 +557,9 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter) -> (node: ^AstNode, o
 		return node, false
 	}
 
-	next_token(iter)
+	if next_token(iter) == nil {
+		return node, false
+	}
 
 	// int foo(void
 	if current_token(iter).type != .T_VOID_KEYWORD {
@@ -496,7 +568,9 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter) -> (node: ^AstNode, o
 	}
 	function_t.params = strings.clone(current_token(iter).value)
 
-	next_token(iter)
+	if next_token(iter) == nil {
+		return node, false
+	}
 
 	// int foo(void)
 	if current_token(iter).type != .T_CLOSE_PARANTHESIS {
@@ -504,7 +578,9 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter) -> (node: ^AstNode, o
 		return node, false
 	}
 
-	next_token(iter)
+	if next_token(iter) == nil {
+		return node, false
+	}
 
 	// int foo(void) {
 	if current_token(iter).type != .T_OPEN_BRACE {
@@ -512,17 +588,27 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter) -> (node: ^AstNode, o
 		return node, false
 	}
 
-	next_token(iter)
+	node.value = function_t
+
+	if next_token(iter) == nil {
+		return node, false
+	}
 
 	// int foo(void) {...}
 	for current_token(iter).type != .T_CLOSE_BRACE {
-		statement_node := resolve_statement(node, iter) or_return
-
+		statement_node, ok := resolve_statement(node, iter)
 		append_ast_node(node, statement_node)
-		next_token(iter)
+
+		if !ok {
+			return node, false
+		}
+
+		if next_token(iter) == nil {
+			log(.Error, "Ran out of token whilst parsing statement")
+			return node, false
+		}
 	} 
 
-	node.value = function_t
 	return node, true
 }
 
@@ -541,7 +627,7 @@ build_ast :: proc(tokens: []Token) -> (bool, ^AstNode) {
 			log(.Error, "Could not resolve function: Aborting")
 			return false, root
 		}
-		next_token(&iter)
+		next_token(&iter, print_error = false)
 	}
 
 	return true, root
