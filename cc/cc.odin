@@ -13,6 +13,8 @@ start_compiling :: proc() {
 }
 
 compile_file :: proc(filepath: string) -> bool {
+	context.allocator = context.temp_allocator
+
 	log(.Proto, "Compiling file: ", filepath)
 	log(.Proto, "Lexing file: ", filepath)
 	tokens := lex(filepath)
@@ -20,7 +22,6 @@ compile_file :: proc(filepath: string) -> bool {
 		log(.Error, "Lexing was not successful")
 		return false
 	}
-	defer cleanup_tokens(&tokens)
 
 	for token in tokens {
 		log(.Proto, fmt.tprint(token))
@@ -29,7 +30,6 @@ compile_file :: proc(filepath: string) -> bool {
 	log(.Proto, "Building AST for file: ", filepath)
 	ok, ast := build_ast(tokens[:])
 	log_ast(ast)
-	defer cleanup_ast_node(ast)
 	if !ok {
 		log(.Error, "Building AST was not successful")
 		return false
@@ -40,7 +40,6 @@ compile_file :: proc(filepath: string) -> bool {
 		log(.Error, "Generating Assembly was not successful")
 		return false
 	}
-	defer delete(assembler)
 
 	src_file := "main.fasm"
 	log(.Proto, "Writing Assembly to ", src_file, "!")
@@ -49,6 +48,8 @@ compile_file :: proc(filepath: string) -> bool {
 	log(.Proto, assembler, cc_prefix = false)
 
 	if !compile_asm(assembler, "main.fasm", "main") do return false
+
+	free_all(context.allocator)
 
 	return true
 }

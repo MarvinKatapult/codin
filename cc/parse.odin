@@ -122,40 +122,6 @@ prev_token :: proc(iter: ^TokenIter) -> ^Token {
 	return &iter.tokens[iter.i - 1]
 }
 
-@(private="package")
-cleanup_ast_function :: proc(function_t: AstFunction) {
-	delete(function_t.identifier)
-	delete(function_t.params)
-}
-
-@(private="package")
-cleanup_ast_statement :: proc(statement_t: AstStatement) {
-	delete(statement_t.value)
-	delete(statement_t.identifier)
-}
-
-@(private="package")
-cleanup_ast_expression :: proc(expression_t: AstExpression) {
-	delete(expression_t.value)
-}
-
-@(private="package")
-cleanup_ast_node :: proc(root: ^AstNode) {
-	for &child in root.childs {
-		cleanup_ast_node(child)
-	}
-	switch v in root.value {
-		case AstFunction:
-			cleanup_ast_function(v)
-		case AstStatement:
-			cleanup_ast_statement(v)
-		case AstExpression:
-			cleanup_ast_expression(v)
-	}
-	if (root.childs != nil) do delete(root.childs)
-	free(root)
-}
-
 @(private="file")
 get_operator_for_token :: proc(token: ^Token, unary: bool) -> (Operator, bool) {
 	#partial switch token.type {
