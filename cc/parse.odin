@@ -579,6 +579,7 @@ resolve_scope :: proc(iter: ^TokenIter) -> (scope_node: ^AstNode, ok: bool) {
 @(private="package")
 build_ast :: proc(tokens: []Token) -> (bool, ^AstNode) {
 	root := new(AstNode)
+	root.type = .AST_PROGRAM
 
 	iter: TokenIter = {
 		tokens = tokens

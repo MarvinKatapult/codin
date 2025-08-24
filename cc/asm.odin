@@ -150,7 +150,6 @@ calc_value_of_expression :: proc(str_b: ^strings.Builder, expression_node: ^AstN
 @(private="file")
 generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
 							   function_label: string, scope: ^map[string]string, rbp_offset: ^int) -> bool {
-
 	statement_t := statement_node.value.(AstStatement)
 
 	#partial switch statement_node.type {
@@ -209,11 +208,32 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 	return true
 }
 
-delete_scope :: proc(s: ^map[string]string) {
-	for str in s {
-		delete(s[str])
+@(private="file")
+clone_scope :: proc(p_scope: map[string]string) -> ^map[string]string {
+	scope := new(map[string]string)
+
+	for binding in p_scope {
+		scope[binding] = p_scope[binding]
 	}
-	delete(s^)
+
+	return scope
+}
+
+@(private="file")
+generate_for_scope :: proc(str_b: ^strings.Builder, scope_node: ^AstNode, 
+						   function_label: string, rbp_offset: ^int, parent_scope: map[string]string = nil) -> bool {
+	scope := new(map[string]string)
+	if parent_scope != nil {
+		scope = clone_scope(parent_scope)
+	}
+	for child in scope_node.childs {
+		if child.type == .AST_SCOPE {
+			generate_for_scope(str_b, child, function_label, rbp_offset, scope^) or_return
+		} else {
+			generate_for_statement(str_b, child, function_label, scope, rbp_offset) or_return
+		}
+	}
+	return true
 }
 
 @(private="file")
@@ -230,12 +250,9 @@ generate_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNode) 
 	strings.write_string(str_b, "\tpush rbp\t; Save old base pointer\n")
 	strings.write_string(str_b, "\tmov rbp, rsp\t; Set new Base pointer\n\n")
 
-	scope: map[string]string
-	defer delete_scope(&scope)
-
 	rbp_offset: int = 0
 	for child in function_node.childs {
-		if !generate_for_statement(str_b, child, function_label, &scope, &rbp_offset) do return false
+		if !generate_for_scope(str_b, child, function_label, &rbp_offset) do return false
 	}
 	
 	return true
