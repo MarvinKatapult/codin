@@ -14,6 +14,7 @@ start_compiling :: proc() {
 
 compile_file :: proc(filepath: string) -> bool {
 	context.allocator = context.temp_allocator
+	defer free_all(context.allocator)
 
 	log(.Proto, "Compiling file: ", filepath)
 	log(.Proto, "Lexing file: ", filepath)
@@ -48,8 +49,6 @@ compile_file :: proc(filepath: string) -> bool {
 	log(.Proto, assembler, cc_prefix = false)
 
 	if !compile_asm(assembler, "main.fasm", "main") do return false
-
-	free_all(context.allocator)
 
 	return true
 }

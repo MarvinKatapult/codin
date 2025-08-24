@@ -51,7 +51,7 @@ log :: proc(type: LogType, msg: ..string, cc_prefix: bool = true, place := #call
 }
 
 @(private="package")
-log_error_with_token :: proc(token: Token, msg: ..string) {
+log_error_with_token :: proc(token: Token, msg: ..string, place := #caller_location) {
     str_b := strings.builder_make()
     defer strings.builder_destroy(&str_b)
     strings.write_string(&str_b, "Token: \'")
@@ -65,7 +65,7 @@ log_error_with_token :: proc(token: Token, msg: ..string) {
     strings.write_string(&str_b, ":")
     strings.write_uint(&str_b, uint(token.x))
     strings.write_string(&str_b, "]")
-    log(.Error, strings.to_string(str_b))
+    log(.Error, strings.to_string(str_b), place = place)
 }
 
 @(private="package")
@@ -85,6 +85,8 @@ log_ast :: proc(root: ^AstNode, x_offset: int = 0) {
             fmt.printfln("%s[%s] %s %s %s", YELLOW, root.type, v.identifier, v.value, RESET)
         case AstExpression:
             fmt.printfln("%s[%s] %s %s Parent: %s %s", YELLOW, root.type, v.value, v.operator, root.parent.type, RESET)
+        case AstScope:
+            fmt.printfln("%s[%s] Parent: %s %s", YELLOW, root.type, root.parent.type, RESET)
         case:
             fmt.printfln("%s[%s]%s", YELLOW, root.type, RESET)
     }
