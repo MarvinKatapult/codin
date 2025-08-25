@@ -79,6 +79,9 @@ Operator :: enum {
 	OP_UNARY_MINUS,
 	OP_LOGICAL_NOT,
 	OP_BIT_NEGATION,
+	OP_BIT_OR,
+	OP_BIT_AND,
+	OP_BIT_XOR,
 	OP_BINARY_PLUS,
 	OP_BINARY_MINUS,
 	OP_BINARY_MULT,
@@ -89,6 +92,8 @@ Operator :: enum {
 	OP_BINARY_GREATER_EQUAL,
 	OP_BINARY_EQUAL,
 	OP_BINARY_NOT_EQUAL,
+	OP_LOGICAL_OR,
+	OP_LOGICAL_AND,
 }
 
 @(private="package")
@@ -147,6 +152,11 @@ get_operator_for_token :: proc(token: ^Token, unary: bool) -> (Operator, bool) {
 		case .T_LESS_EQUAL:		return .OP_BINARY_LESS_EQUAL,	 true
 		case .T_EQUAL_EQUAL:	return .OP_BINARY_EQUAL,		 true
 		case .T_NOT_EQUAL:		return .OP_BINARY_NOT_EQUAL,	 true
+		case .T_LOGICAL_OR:		return .OP_LOGICAL_OR,			 true
+		case .T_LOGICAL_AND:	return .OP_LOGICAL_AND,			 true
+		case .T_BIT_XOR:		return .OP_BIT_XOR,				 true
+		case .T_BIT_AND:		return .OP_BIT_AND,				 true
+		case .T_BIT_OR:			return .OP_BIT_OR,				 true
 		case: return nil, false
 	}
 }
@@ -361,9 +371,169 @@ resolve_expr_equal :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible 
 	return left_child, true
 }
 
+@(private="file")
+resolve_expr_bit_xor :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (left_child: ^AstNode, ok: bool) {
+	
+	left_child, ok = resolve_expr_equal(parent, iter, no_expr_possible)
+	if !ok {
+		return left_child, ok
+	}
+	
+	// |
+	for current_token(iter).type == .T_BIT_XOR {
+
+		op_token := current_token(iter)
+		next_token(iter)
+		
+		expression_t: AstExpression
+		expression_t.operator = get_operator_for_token(op_token, false) or_return
+		
+		right_child := resolve_expr_equal(nil, iter, no_expr_possible) or_return
+		
+		binary_node := new(AstNode)
+		binary_node.type = .AST_EXPR_BINARY
+		binary_node.value = expression_t
+		
+		append_ast_node(binary_node, left_child)
+		append_ast_node(binary_node, right_child)
+		
+		left_child = binary_node
+	}
+	
+	return left_child, true
+}
+
+@(private="file")
+resolve_expr_bit_and :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (left_child: ^AstNode, ok: bool) {
+	
+	left_child, ok = resolve_expr_bit_xor(parent, iter, no_expr_possible)
+	if !ok {
+		return left_child, ok
+	}
+	
+	// |
+	for current_token(iter).type == .T_BIT_AND {
+
+		op_token := current_token(iter)
+		next_token(iter)
+		
+		expression_t: AstExpression
+		expression_t.operator = get_operator_for_token(op_token, false) or_return
+		
+		right_child := resolve_expr_bit_xor(nil, iter, no_expr_possible) or_return
+		
+		binary_node := new(AstNode)
+		binary_node.type = .AST_EXPR_BINARY
+		binary_node.value = expression_t
+		
+		append_ast_node(binary_node, left_child)
+		append_ast_node(binary_node, right_child)
+		
+		left_child = binary_node
+	}
+	
+	return left_child, true
+}
+
+@(private="file")
+resolve_expr_bit_or :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (left_child: ^AstNode, ok: bool) {
+	
+	left_child, ok = resolve_expr_bit_and(parent, iter, no_expr_possible)
+	if !ok {
+		return left_child, ok
+	}
+	
+	// |
+	for current_token(iter).type == .T_BIT_OR {
+
+		op_token := current_token(iter)
+		next_token(iter)
+		
+		expression_t: AstExpression
+		expression_t.operator = get_operator_for_token(op_token, false) or_return
+		
+		right_child := resolve_expr_bit_and(nil, iter, no_expr_possible) or_return
+		
+		binary_node := new(AstNode)
+		binary_node.type = .AST_EXPR_BINARY
+		binary_node.value = expression_t
+		
+		append_ast_node(binary_node, left_child)
+		append_ast_node(binary_node, right_child)
+		
+		left_child = binary_node
+	}
+	
+	return left_child, true
+}
+
+@(private="file")
+resolve_expr_log_and :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (left_child: ^AstNode, ok: bool) {
+	
+	left_child, ok = resolve_expr_bit_or(parent, iter, no_expr_possible)
+	if !ok {
+		return left_child, ok
+	}
+	
+	// &&
+	for current_token(iter).type == .T_LOGICAL_AND {
+
+		op_token := current_token(iter)
+		next_token(iter)
+		
+		expression_t: AstExpression
+		expression_t.operator = get_operator_for_token(op_token, false) or_return
+		
+		right_child := resolve_expr_bit_or(nil, iter, no_expr_possible) or_return
+		
+		binary_node := new(AstNode)
+		binary_node.type = .AST_EXPR_BINARY
+		binary_node.value = expression_t
+		
+		append_ast_node(binary_node, left_child)
+		append_ast_node(binary_node, right_child)
+		
+		left_child = binary_node
+	}
+	
+	return left_child, true
+}
+
+@(private="file")
+resolve_expr_log_or :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (left_child: ^AstNode, ok: bool) {
+	
+	left_child, ok = resolve_expr_log_and(parent, iter, no_expr_possible)
+	if !ok {
+		return left_child, ok
+	}
+	
+	// ||
+	for current_token(iter).type == .T_LOGICAL_OR {
+
+		op_token := current_token(iter)
+		next_token(iter)
+		
+		expression_t: AstExpression
+		expression_t.operator = get_operator_for_token(op_token, false) or_return
+		
+		right_child := resolve_expr_log_and(nil, iter, no_expr_possible) or_return
+		
+		binary_node := new(AstNode)
+		binary_node.type = .AST_EXPR_BINARY
+		binary_node.value = expression_t
+		
+		append_ast_node(binary_node, left_child)
+		append_ast_node(binary_node, right_child)
+		
+		left_child = binary_node
+	}
+	
+	return left_child, true
+}
+
 @(private="package")
 resolve_expr :: proc(root: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (^AstNode, bool) {
-	return resolve_expr_equal(root, iter, no_expr_possible)
+	return resolve_expr_log_or(root, iter, no_expr_possible)
 }
 
 @(private="package")

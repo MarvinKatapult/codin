@@ -31,6 +31,11 @@ TokenType :: enum {
 	T_ASSIGNMENT,
 	T_EQUAL_EQUAL,
 	T_NOT_EQUAL,
+	T_BIT_AND,
+	T_BIT_OR,
+	T_BIT_XOR,
+	T_LOGICAL_AND,
+	T_LOGICAL_OR,
 }
 
 @(private="package")
@@ -75,6 +80,12 @@ is_special_symbol :: proc(symbol: rune) -> (bool, TokenType) {
 			return true, TokenType.T_GREATER
 		case '=':
 			return true, TokenType.T_ASSIGNMENT
+		case '&':
+			return true, TokenType.T_BIT_AND
+		case '|':
+			return true, TokenType.T_BIT_OR
+		case '^':
+			return true, TokenType.T_BIT_XOR
 	}
 
 	return false, nil
@@ -194,7 +205,7 @@ lex :: proc(filename: string) -> [dynamic]Token {
 		is_space := strings.is_space(c)
 		special_symbol, type := is_special_symbol(c)
 
-		if c == '=' {
+		if c == '=' && i != 0 {
 			last_token := &ret[len(ret)-1]
 			#partial switch last_token.type {
 				case .T_LESS:
@@ -217,6 +228,26 @@ lex :: proc(filename: string) -> [dynamic]Token {
 					delete(last_token.value)
 					last_token.value = "!="
 					continue;
+			}
+		}
+
+		if c == '&' && i != 0 {
+			last_token := &ret[len(ret)-1]
+			if last_token.type == .T_BIT_AND {
+				last_token.type = .T_LOGICAL_AND
+				delete(last_token.value)
+				last_token.value = "&&"
+				continue;
+			}
+		}
+
+		if c == '|' && i != 0 {
+			last_token := &ret[len(ret)-1]
+			if last_token.type == .T_BIT_OR {
+				last_token.type = .T_LOGICAL_OR
+				delete(last_token.value)
+				last_token.value = "||"
+				continue;
 			}
 		}
 

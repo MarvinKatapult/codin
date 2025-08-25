@@ -67,6 +67,27 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 		case .OP_BINARY_NOT_EQUAL:
 			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax != rdi\n")
 			strings.write_string(str_b, "\tsetne al\t; Set al to 1 if true\n")
+		case .OP_LOGICAL_OR:
+			strings.write_string(str_b, "\ttest rax, rax\t; Check if rax != 0\n")
+			strings.write_string(str_b, "\tsetnz al\t; al = (rax != 0) ? 1 : 0\n")
+			strings.write_string(str_b, "\ttest rdi, rdi\t; Check if rdi != 0\n")
+			strings.write_string(str_b, "\tsetnz dl \t; dl = 1 if 0F == 1 else = 0\n")
+			strings.write_string(str_b, "\tor al, dl\t; Logical OR\n")
+			strings.write_string(str_b, "\tmovzx rax, al\t; -> 64-Bit\n")
+		case .OP_LOGICAL_AND:
+			strings.write_string(str_b, "\ttest rax, rax\t; Check if rax != 0\n")
+			strings.write_string(str_b, "\tsetnz al\t; al = (rax != 0) ? 1 : 0\n")
+			strings.write_string(str_b, "\ttest rdi, rdi\t; Check if rdi != 0\n")
+			strings.write_string(str_b, "\tsetnz dl \t; dl = 1 if 0F == 1 else = 0\n")
+			strings.write_string(str_b, "\tand al, dl\t; Logical AND\n")
+			strings.write_string(str_b, "\tmovzx rax, al\t; -> 64-Bit\n")
+		case .OP_BIT_OR:
+			strings.write_string(str_b, "\tor rax, rdi\t; Bit OR")
+		case .OP_BIT_AND:
+			strings.write_string(str_b, "\tand rax, rdi\t; Bit AND")
+		case .OP_BIT_XOR:
+			strings.write_string(str_b, "\txor rax, rdi\t; Bit XOR")
+			
 		case .OP:
 			log(.Error, "Not a valid Operator:", fmt.tprintf("%s", expression_node^))
 			return false
