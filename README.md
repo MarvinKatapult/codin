@@ -14,7 +14,12 @@ It's not finished and even if it was, it wouldn't be good, but that's not the go
 ```c
 int main(void) {
     int a = (3 - 2) * 2;
-    int b = a * 5;
-    return a == b < 5;
+    int b;
+    {
+        int c = a * 3;
+        b = 4 * c | 2 && 1;
+    }
+    ;;;;
+    return b ^ 1;
 }
 ```
