@@ -8,6 +8,14 @@ import "core:sys/linux/"
 INT_BYTE_SIZE :: 8
 
 @(private="file")
+FunctionScope :: struct {
+	variables: map[string]string,
+	label: string,
+	label_count: ^int,
+	rbp_offset: ^int,
+}
+
+@(private="file")
 append_fasm_header :: proc(str_b: ^strings.Builder) -> bool {
 	strings.write_string(str_b,
 		"format ELF64 executable 3\n"
@@ -26,8 +34,15 @@ append_fasm_header :: proc(str_b: ^strings.Builder) -> bool {
 }
 
 @(private="file")
-generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^AstNode) -> bool {
-	expression_t := expression_node.value.(AstExpression)
+write_label :: proc(str_b: ^strings.Builder, func_scope: ^FunctionScope, advance := false) {
+	strings.write_string(str_b, ".L")
+	strings.write_int(str_b, func_scope.label_count^)
+	if advance do func_scope.label_count^ = func_scope.label_count^ + 1
+}
+
+@(private="file")
+generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^AstNode, func_scope: ^FunctionScope) -> bool {
+								expression_t := expression_node.value.(AstExpression)
 
 	switch expression_t.operator {
 		case .OP_BIT_NEGATION:
@@ -68,19 +83,29 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax != rdi\n")
 			strings.write_string(str_b, "\tsetne al\t; Set al to 1 if true\n")
 		case .OP_LOGICAL_OR:
-			strings.write_string(str_b, "\ttest rax, rax\t; Check if rax != 0\n")
-			strings.write_string(str_b, "\tsetnz al\t; al = (rax != 0) ? 1 : 0\n")
 			strings.write_string(str_b, "\ttest rdi, rdi\t; Check if rdi != 0\n")
-			strings.write_string(str_b, "\tsetnz dl \t; dl = 1 if 0F == 1 else = 0\n")
-			strings.write_string(str_b, "\tor al, dl\t; Logical OR\n")
-			strings.write_string(str_b, "\tmovzx rax, al\t; -> 64-Bit\n")
+			strings.write_string(str_b, "\tsetnz dl\t; dl = (rdi != 0) ? 1 : 0\n")
+			strings.write_string(str_b, "\tjnz ")
+			write_label(str_b, func_scope)
+			strings.write_string(str_b, "\t\t; Short Circuit Evaluation\n")
+			strings.write_string(str_b, "\ttest rax, rax\t; Check if rax != 0\n")
+			strings.write_string(str_b, "\tsetnz al \t; al = 1 if 0F == 1 else = 0\n")
+			strings.write_string(str_b, "\tor dl, al\t; Logical OR\n\t")
+			write_label(str_b, func_scope, advance = true)
+			strings.write_string(str_b, ":\n")
+			strings.write_string(str_b, "\tmovzx rax, dl\t; -> 64-Bit\n")
 		case .OP_LOGICAL_AND:
-			strings.write_string(str_b, "\ttest rax, rax\t; Check if rax != 0\n")
-			strings.write_string(str_b, "\tsetnz al\t; al = (rax != 0) ? 1 : 0\n")
 			strings.write_string(str_b, "\ttest rdi, rdi\t; Check if rdi != 0\n")
-			strings.write_string(str_b, "\tsetnz dl \t; dl = 1 if 0F == 1 else = 0\n")
-			strings.write_string(str_b, "\tand al, dl\t; Logical AND\n")
-			strings.write_string(str_b, "\tmovzx rax, al\t; -> 64-Bit\n")
+			strings.write_string(str_b, "\tsetnz dl\t; dl = (rdi != 0) ? 1 : 0\n")
+			strings.write_string(str_b, "\tjz ")
+			write_label(str_b, func_scope)
+			strings.write_string(str_b, "\t\t; Short Circuit Evaluation\n")
+			strings.write_string(str_b, "\ttest rax, rax\t; Check if rax != 0\n")
+			strings.write_string(str_b, "\tsetnz al \t; al = 1 if 0F == 1 else = 0\n")
+			strings.write_string(str_b, "\tand dl, al\t; Logical AND\n\t")
+			write_label(str_b, func_scope, advance = true)
+			strings.write_string(str_b, ":\n")
+			strings.write_string(str_b, "\tmovzx rax, dl\t; -> 64-Bit\n")
 		case .OP_BIT_OR:
 			strings.write_string(str_b, "\tor rax, rdi\t; Bit OR")
 		case .OP_BIT_AND:
@@ -99,7 +124,7 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 }
 
 @(private="file")
-generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode, scope: ^map[string]string) -> bool {
+generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode, func_scope: ^FunctionScope) -> bool {
 	expression_t := expression_node.value.(AstExpression)
 	#partial switch expression_node.type {
 		case .AST_EXPR_VARIABLE:
@@ -108,11 +133,11 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 				return false
 			}
 			strings.write_string(str_b, "\tmov qword rax, ")
-			if expression_t.value not_in scope {
+			if expression_t.value not_in func_scope.variables {
 				log(.Error, "Variable ", expression_t.value, " not declared!")
 				return false
 			}
-			strings.write_string(str_b, scope[expression_t.value])
+			strings.write_string(str_b, func_scope.variables[expression_t.value])
 			strings.write_string(str_b, " ; moving value of variable directly into rax\n\n")
 			return true
 		case .AST_EXPR_CONSTANT:
@@ -130,9 +155,9 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 				return false
 			}
 			child := expression_node.childs[0]
-			if !generate_asm_for_expr(str_b, child, scope) do return false
+			if !generate_asm_for_expr(str_b, child, func_scope) do return false
 
-			return generate_asm_for_operator(str_b, expression_node)
+			return generate_asm_for_operator(str_b, expression_node, func_scope)
 			
 		case .AST_EXPR_BINARY:
 			if len(expression_node.childs) != 2 {
@@ -141,16 +166,16 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 			}
 
 			valuel := expression_node.childs[0]
-			if !generate_asm_for_expr(str_b, valuel, scope) do return false
+			if !generate_asm_for_expr(str_b, valuel, func_scope) do return false
 		
 			strings.write_string(str_b, "\tpush rax\t; Push to stack\n\n")
 
 			valuer := expression_node.childs[1]
-			if !generate_asm_for_expr(str_b, valuer, scope) do return false
+			if !generate_asm_for_expr(str_b, valuer, func_scope) do return false
 
 			strings.write_string(str_b, "\tpop rdi\t\t; Popping Value to rdi off stack\n\n")
 
-			return generate_asm_for_operator(str_b, expression_node)
+			return generate_asm_for_operator(str_b, expression_node, func_scope)
 	}
 
 	log(.Error, "Expression must be constant or unary expression!")
@@ -159,9 +184,10 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 }
 
 @(private="file")
-calc_value_of_expression :: proc(str_b: ^strings.Builder, expression_node: ^AstNode, scope: ^map[string]string) -> bool {
+calc_value_of_expression :: proc(str_b: ^strings.Builder, 
+								 expression_node: ^AstNode, func_scope: ^FunctionScope) -> bool {
 
-	if !generate_asm_for_expr(str_b, expression_node, scope) {
+	if !generate_asm_for_expr(str_b, expression_node, func_scope) {
 		return false
 	}
 
@@ -170,19 +196,19 @@ calc_value_of_expression :: proc(str_b: ^strings.Builder, expression_node: ^AstN
 
 @(private="file")
 generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
-							   function_label: string, scope: ^map[string]string, rbp_offset: ^int) -> bool {
+							   func_scope: ^FunctionScope) -> bool {
 	statement_t := statement_node.value.(AstStatement)
 
 	#partial switch statement_node.type {
 		case .AST_RETURN_STATEMENT: fallthrough
 		case .AST_EXPR_STATEMENT:
 			if len(statement_node.childs) <= 0 do return false
-			ok := calc_value_of_expression(str_b, statement_node.childs[0], scope)
+			ok := calc_value_of_expression(str_b, statement_node.childs[0], func_scope)
 			if !ok do return false
 
 			if statement_node.type == .AST_RETURN_STATEMENT {
 				strings.write_string(str_b, "\tleave\t\t; Restore old BasePointer and Free Stack memory\n")
-				if function_label != "start" {
+				if func_scope.label != "start" {
 					strings.write_string(str_b, "\tret \t\t; Returning\n\n")
 				} else {
 					strings.write_string(str_b, "\tmov rdi, rax\t; move calculated return value in rdi\n")
@@ -191,7 +217,7 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 				}
 			}
 		case .AST_VAR_DECLARE:
-			if statement_t.identifier in scope {
+			if statement_t.identifier in func_scope.variables {
 				log(.Error, "Variale redefinition!")
 				return false
 			}
@@ -201,25 +227,26 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 			strings.write_int(str_b,	INT_BYTE_SIZE)
 			strings.write_string(str_b, "\t; Allocate memory on the stack\n\n")
 			statement_t := statement_node.value.(AstStatement)
+			rbp_offset := func_scope.rbp_offset
 			rbp_offset^ = rbp_offset^ - INT_BYTE_SIZE
-			scope[statement_t.identifier] = strings.clone(fmt.tprintf("[rbp%d]", rbp_offset^))
+			func_scope.variables[statement_t.identifier] = strings.clone(fmt.tprintf("[rbp%d]", rbp_offset^))
 			if len(statement_node.childs) > 0 {
-				if !generate_for_statement(str_b, statement_node.childs[0], function_label, scope, rbp_offset) {
+				if !generate_for_statement(str_b, statement_node.childs[0], func_scope) {
 					return false
 				}
 			}
 		case .AST_VAR_ASSIGNMENT:
 			if len(statement_node.childs) <= 0 do return false
-			ok := calc_value_of_expression(str_b, statement_node.childs[0], scope)
+			ok := calc_value_of_expression(str_b, statement_node.childs[0], func_scope)
 			if !ok do return false
 
 			statement_t := statement_node.value.(AstStatement)
 			strings.write_string(str_b, "\tmov qword ")
-			if statement_t.identifier not_in scope {
+			if statement_t.identifier not_in func_scope.variables {
 				log(.Error, "Variable ", statement_t.identifier, " not declared!")
 				return false
 			}
-			strings.write_string(str_b, scope[statement_t.identifier])
+			strings.write_string(str_b, func_scope.variables[statement_t.identifier])
 			strings.write_string(str_b, ", ") 
 			strings.write_string(str_b, "rax ; mov calculated value into variable: ")
 			strings.write_string(str_b, statement_t.identifier)
@@ -242,16 +269,15 @@ clone_scope :: proc(p_scope: map[string]string) -> ^map[string]string {
 
 @(private="file")
 generate_for_scope :: proc(str_b: ^strings.Builder, scope_node: ^AstNode, 
-						   function_label: string, rbp_offset: ^int, parent_scope: map[string]string = nil) -> bool {
+						   func_scope: ^FunctionScope) -> bool {
 	scope := new(map[string]string)
-	if parent_scope != nil {
-		scope = clone_scope(parent_scope)
-	}
+	func_scope.variables = clone_scope(func_scope.variables)^
+
 	for child in scope_node.childs {
 		if child.type == .AST_SCOPE {
-			generate_for_scope(str_b, child, function_label, rbp_offset, scope^) or_return
+			generate_for_scope(str_b, child, func_scope) or_return
 		} else {
-			generate_for_statement(str_b, child, function_label, scope, rbp_offset) or_return
+			generate_for_statement(str_b, child, func_scope) or_return
 		}
 	}
 	return true
@@ -271,9 +297,16 @@ generate_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNode) 
 	strings.write_string(str_b, "\tpush rbp\t; Save old base pointer\n")
 	strings.write_string(str_b, "\tmov rbp, rsp\t; Set new Base pointer\n\n")
 
+	func_scope := FunctionScope {
+		variables = make(map[string]string),
+		label_count = new(int),
+		rbp_offset = new(int),
+		label = strings.clone(function_label)
+	}
+
 	rbp_offset: int = 0
 	for child in function_node.childs {
-		if !generate_for_scope(str_b, child, function_label, &rbp_offset) do return false
+		if !generate_for_scope(str_b, child, &func_scope) do return false
 	}
 	
 	return true
