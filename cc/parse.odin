@@ -22,6 +22,7 @@ NodeType :: enum {
 	AST_EXPR_BINARY,
 	AST_EXPR_VARIABLE,
 	AST_IF,
+	AST_ELSE,
 }
 
 @(private="package")
@@ -114,6 +115,17 @@ next_token :: proc(iter: ^TokenIter, place := #caller_location, fail := true) ->
 		return nil
 	}
 	return &iter.tokens[iter.i]
+}
+
+look_ahead_token :: proc(iter: ^TokenIter, place := #caller_location, fail := true) -> ^Token {
+	if iter.i + 1 >= len(iter.tokens) {
+		if fail {
+			log(.Error, "Ran out of token", place = place)
+			os.exit(-1)
+		}
+		return nil
+	}
+	return &iter.tokens[iter.i+1]
 }
 
 @(private="package")
@@ -563,6 +575,7 @@ resolve_statement :: proc(iter: ^TokenIter) -> (node: ^AstNode, ok: bool) {
 	node = new(AstNode)
 	node.value = statement_t
 
+	ok = true
 	parsed_stmt := false
 
 	if !token_left(iter) {
@@ -647,10 +660,21 @@ resolve_statement :: proc(iter: ^TokenIter) -> (node: ^AstNode, ok: bool) {
 		expr := resolve_expr(node, iter, no_expr_possible = true) or_return
 		append_ast_node(node, expr)
 
-		log(.Debug, "Token in resolve_scope of if-statement:", fmt.tprint(current_token(iter)))
-
-		if_scope, ok := resolve_scope(iter)
+		if_scope := resolve_scope(iter) or_return
 		append_ast_node(node, if_scope)
+
+		if look_ahead_token(iter).type == .T_ELSE {
+			next_token(iter) // else
+
+			else_node := new(AstNode)
+			else_node.type = .AST_ELSE
+			append_ast_node(node, else_node)
+
+			next_token(iter)  // {
+
+			else_scope := resolve_scope(iter) or_return
+			append_ast_node(else_node, else_scope)
+		}
 
 		return node, ok
 	}

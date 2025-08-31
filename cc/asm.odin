@@ -43,18 +43,34 @@ write_label :: proc(str_b: ^strings.Builder, func_scope: ^FunctionScope, advance
 }
 
 generate_asm_for_if :: proc(str_b: ^strings.Builder, if_node: ^AstNode, func_scope: ^FunctionScope) -> bool {
-	assert(len(if_node.childs) == 2)
+	assert(len(if_node.childs) >= 2)
 
 	// Checking condition
 	if !generate_asm_for_expr(str_b, if_node.childs[0], func_scope) do return false
 	strings.write_string(str_b, "\tcmp rax, 0\t; Check if condition is false\n")
 	strings.write_string(str_b, "\tje ")
-	if_end_label_index := write_label(str_b, func_scope, advance = true)
+	potential_else := write_label(str_b, func_scope, advance = true)
 	strings.write_string(str_b, "\t\t; Jump over scope if condition is false\n")
 
 	// Scope
-	if !generate_asm_for_scope(str_b, if_node.childs[1], func_scope) do return false
-	strings.write_string(str_b, fmt.tprintf("\t.L%d:\t\t; If End\n", if_end_label_index))
+	generate_asm_for_scope(str_b, if_node.childs[1], func_scope) or_return
+
+	strings.write_string(str_b, "\tjmp ")
+	end_of_if_scope := write_label(str_b, func_scope, advance = true)
+	strings.write_string(str_b, "\t\t; Jump to end of if-statement\n\n")
+
+	strings.write_string(str_b, fmt.tprintf("\t.L%d:\t\t; Potential Else\n\n", potential_else))
+
+	for child, i in if_node.childs {
+		if i <= 1 do continue // Skip condition and scope node
+		// Here are nodes such as else and else if
+
+		if child.type == .AST_ELSE {
+			generate_asm_for_scope(str_b, child.childs[0], func_scope) or_return
+		}
+	}
+
+	strings.write_string(str_b, fmt.tprintf("\t.L%d:\t\t; If End\n\n", end_of_if_scope))
 
 	return true
 }
