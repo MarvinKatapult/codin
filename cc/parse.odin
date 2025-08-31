@@ -238,7 +238,9 @@ resolve_expr_primary :: proc(iter: ^TokenIter, no_expr_possible := true) -> (nod
 		node.type = .AST_EXPR_UNARY
 
 		next_token(iter)
-		return resolve_expr_primary(iter, no_expr_possible = false)
+		expr := resolve_expr_primary(iter, no_expr_possible = false) or_return
+		append_ast_node(node, expr)
+		return node, true
 	}
 
 	if no_expr_possible && current_token(iter).type == .T_SEMICOLON {
