@@ -17,6 +17,11 @@ int main(void) {
     int b;
     {
         int c = a * 3;
+        if (c + 1) {
+            c = 69 + 420;
+        } else {
+            c = 1337 * 2;
+        }
         b = 4 * c | 2 && 1;
     }
     ;;;;
