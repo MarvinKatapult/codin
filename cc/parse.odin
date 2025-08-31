@@ -84,6 +84,8 @@ Operator :: enum {
 	OP_BIT_OR,
 	OP_BIT_AND,
 	OP_BIT_XOR,
+	OP_BIT_SHL,
+	OP_BIT_SHR,
 	OP_BINARY_PLUS,
 	OP_BINARY_MINUS,
 	OP_BINARY_MULT,
@@ -172,6 +174,8 @@ get_operator_for_token :: proc(token: ^Token, unary: bool) -> (Operator, bool) {
 		case .T_BIT_XOR:		return .OP_BIT_XOR,				 true
 		case .T_BIT_AND:		return .OP_BIT_AND,				 true
 		case .T_BIT_OR:			return .OP_BIT_OR,				 true
+		case .T_SHIFT_LEFT:		return .OP_BIT_SHL,				 true
+		case .T_SHIFT_RIGHT:	return .OP_BIT_SHR,				 true
 		case: return nil, false
 	}
 }
@@ -321,9 +325,41 @@ resolve_expr_additive :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possib
 }
 
 @(private="file")
-resolve_expr_comparing :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (left_child: ^AstNode, ok: bool) {
+resolve_expr_bit_shift :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (left_child: ^AstNode, ok: bool) {
 	
 	left_child, ok = resolve_expr_additive(parent, iter, no_expr_possible)
+	if !ok {
+		return left_child, ok
+	}
+	
+	// + -
+	for current_token(iter).type == .T_SHIFT_LEFT || current_token(iter).type == .T_SHIFT_RIGHT {
+		op_token := current_token(iter)
+		next_token(iter)
+		
+		expression_t: AstExpression
+		expression_t.operator = get_operator_for_token(op_token, false) or_return
+		
+		right_child := resolve_expr_additive(nil, iter, no_expr_possible) or_return
+		
+		binary_node := new(AstNode)
+		binary_node.type = .AST_EXPR_BINARY
+		binary_node.value = expression_t
+		
+		append_ast_node(binary_node, left_child)
+		append_ast_node(binary_node, right_child)
+		
+		left_child = binary_node
+	}
+	
+	return left_child, true
+}
+
+
+@(private="file")
+resolve_expr_comparing :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (left_child: ^AstNode, ok: bool) {
+	
+	left_child, ok = resolve_expr_bit_shift(parent, iter, no_expr_possible)
 	if !ok {
 		return left_child, ok
 	}
@@ -340,7 +376,7 @@ resolve_expr_comparing :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possi
 		expression_t: AstExpression
 		expression_t.operator = get_operator_for_token(op_token, false) or_return
 		
-		right_child := resolve_expr_additive(nil, iter, no_expr_possible) or_return
+		right_child := resolve_expr_bit_shift(nil, iter, no_expr_possible) or_return
 		
 		binary_node := new(AstNode)
 		binary_node.type = .AST_EXPR_BINARY

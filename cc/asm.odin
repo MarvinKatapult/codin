@@ -150,11 +150,19 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 			strings.write_string(str_b, ":\n")
 			strings.write_string(str_b, "\tmovzx rax, dl\t; -> 64-Bit\n")
 		case .OP_BIT_OR:
-			strings.write_string(str_b, "\tor rax, rdi\t; Bit OR")
+			strings.write_string(str_b, "\tor rax, rdi\t; Bit OR\n")
 		case .OP_BIT_AND:
-			strings.write_string(str_b, "\tand rax, rdi\t; Bit AND")
+			strings.write_string(str_b, "\tand rax, rdi\t; Bit AND\n")
 		case .OP_BIT_XOR:
-			strings.write_string(str_b, "\txor rax, rdi\t; Bit XOR")
+			strings.write_string(str_b, "\txor rax, rdi\t; Bit XOR\n")
+		case .OP_BIT_SHL:
+			strings.write_string(str_b, "\tmov rcx, rax\t; Only cl can be used for shift operations\n")
+			strings.write_string(str_b, "\tsal rdi, cl\t; rax << rdi\n")
+			strings.write_string(str_b, "\tmov rax, rdi\t\n")
+		case .OP_BIT_SHR:
+			strings.write_string(str_b, "\tmov rcx, rax\t; Only cl can be used for shift operations\n")
+			strings.write_string(str_b, "\tsar rdi, cl\t; rax >> rdi\n")
+			strings.write_string(str_b, "\tmov rax, rdi\t\n")
 			
 		case .OP:
 			log(.Error, "Not a valid Operator:", fmt.tprintf("%s", expression_node^))

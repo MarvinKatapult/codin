@@ -39,6 +39,8 @@ TokenType :: enum {
 	T_BIT_XOR,
 	T_LOGICAL_AND,
 	T_LOGICAL_OR,
+	T_SHIFT_LEFT,
+	T_SHIFT_RIGHT,
 }
 
 @(private="package")
@@ -237,6 +239,26 @@ lex :: proc(filename: string) -> [dynamic]Token {
 					delete(last_token.value)
 					last_token.value = "!="
 					continue;
+			}
+		}
+
+		if c == '<' && i != 0 {
+			last_token := &ret[len(ret)-1]
+			if last_token.type == .T_LESS {
+				last_token.type = .T_SHIFT_LEFT
+				delete(last_token.value)
+				last_token.value = "<<"
+				continue
+			}
+		}
+
+		if c == '>' && i != 0 {
+			last_token := &ret[len(ret)-1]
+			if last_token.type == .T_GREATER {
+				last_token.type = .T_SHIFT_RIGHT
+				delete(last_token.value)
+				last_token.value = ">>"
+				continue
 			}
 		}
 
