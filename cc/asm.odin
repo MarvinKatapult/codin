@@ -34,15 +34,35 @@ append_fasm_header :: proc(str_b: ^strings.Builder) -> bool {
 }
 
 @(private="file")
-write_label :: proc(str_b: ^strings.Builder, func_scope: ^FunctionScope, advance := false) {
+write_label :: proc(str_b: ^strings.Builder, func_scope: ^FunctionScope, advance := false) -> (ret: int) {
 	strings.write_string(str_b, ".L")
-	strings.write_int(str_b, func_scope.label_count^)
+	ret = func_scope.label_count^
+	strings.write_int(str_b, ret)
 	if advance do func_scope.label_count^ = func_scope.label_count^ + 1
+	return ret
+}
+
+generate_asm_for_if :: proc(str_b: ^strings.Builder, if_node: ^AstNode, func_scope: ^FunctionScope) -> bool {
+	assert(len(if_node.childs) == 2)
+
+	// Checking condition
+	if !generate_asm_for_expr(str_b, if_node.childs[0], func_scope) do return false
+	strings.write_string(str_b, "\tcmp rax, 0\t; Check if condition is false\n")
+	strings.write_string(str_b, "\tje ")
+	if_end_label_index := write_label(str_b, func_scope, advance = true)
+	strings.write_string(str_b, "\t\t; Jump over scope if condition is false\n")
+
+	// Scope
+	if !generate_asm_for_scope(str_b, if_node.childs[1], func_scope) do return false
+	strings.write_string(str_b, fmt.tprintf("\t.L%d:\t\t; If End\n", if_end_label_index))
+
+	return true
 }
 
 @(private="file")
 generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^AstNode, func_scope: ^FunctionScope) -> bool {
-								expression_t := expression_node.value.(AstExpression)
+
+	expression_t := expression_node.value.(AstExpression)
 
 	switch expression_t.operator {
 		case .OP_BIT_NEGATION:
@@ -251,6 +271,8 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 			strings.write_string(str_b, "rax ; mov calculated value into variable: ")
 			strings.write_string(str_b, statement_t.identifier)
 			strings.write_string(str_b, "\n\n")
+		case .AST_IF:
+			if !generate_asm_for_if(str_b, statement_node, func_scope) do return false
 	}
 
 	return true
@@ -268,14 +290,14 @@ clone_scope :: proc(p_scope: map[string]string) -> ^map[string]string {
 }
 
 @(private="file")
-generate_for_scope :: proc(str_b: ^strings.Builder, scope_node: ^AstNode, 
+generate_asm_for_scope :: proc(str_b: ^strings.Builder, scope_node: ^AstNode, 
 						   func_scope: ^FunctionScope) -> bool {
 	scope := new(map[string]string)
 	func_scope.variables = clone_scope(func_scope.variables)^
 
 	for child in scope_node.childs {
 		if child.type == .AST_SCOPE {
-			generate_for_scope(str_b, child, func_scope) or_return
+			generate_asm_for_scope(str_b, child, func_scope) or_return
 		} else {
 			generate_for_statement(str_b, child, func_scope) or_return
 		}
@@ -284,7 +306,7 @@ generate_for_scope :: proc(str_b: ^strings.Builder, scope_node: ^AstNode,
 }
 
 @(private="file")
-generate_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNode) -> bool {
+generate_asm_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNode) -> bool {
 
 	function_t := function_node.value.(AstFunction)
 
@@ -306,7 +328,7 @@ generate_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNode) 
 
 	rbp_offset: int = 0
 	for child in function_node.childs {
-		if !generate_for_scope(str_b, child, &func_scope) do return false
+		if !generate_asm_for_scope(str_b, child, &func_scope) do return false
 	}
 	
 	return true
@@ -320,7 +342,7 @@ generate_for_ast_node :: proc(str_b: ^strings.Builder, node: ^AstNode) -> bool {
 				if !generate_for_ast_node(str_b, child) do return false
 			}
 		case .AST_FUNCTION:
-			if !generate_for_function(str_b, node) do return false
+			if !generate_asm_for_function(str_b, node) do return false
 	}
 	return true
 }

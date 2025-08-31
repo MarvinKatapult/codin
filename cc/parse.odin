@@ -21,6 +21,7 @@ NodeType :: enum {
 	AST_EXPR_UNARY,
 	AST_EXPR_BINARY,
 	AST_EXPR_VARIABLE,
+	AST_IF,
 }
 
 @(private="package")
@@ -568,6 +569,7 @@ resolve_statement :: proc(iter: ^TokenIter) -> (node: ^AstNode, ok: bool) {
 		return node, false
 	}
 
+	// Inner Scope
 	if !parsed_stmt && current_token(iter).type == .T_OPEN_BRACE {
 		node, ok = resolve_scope(iter)
 		return node, ok
@@ -629,6 +631,28 @@ resolve_statement :: proc(iter: ^TokenIter) -> (node: ^AstNode, ok: bool) {
 		if !resolving_assignment(node, iter) {
 			return node, false
 		}
+	}
+
+	// if-statement
+	if !parsed_stmt && current_token(iter).type == .T_IF {
+		parsed_stmt = true
+		node.type = .AST_IF
+		next_token(iter)
+
+		if current_token(iter).type != .T_OPEN_PARANTHESIS {
+			log_error_with_token(current_token(iter)^, "if-statement condition has to be wrapped in (...)")
+			return node, false
+		}
+
+		expr := resolve_expr(node, iter, no_expr_possible = true) or_return
+		append_ast_node(node, expr)
+
+		log(.Debug, "Token in resolve_scope of if-statement:", fmt.tprint(current_token(iter)))
+
+		if_scope, ok := resolve_scope(iter)
+		append_ast_node(node, if_scope)
+
+		return node, ok
 	}
 
 	// Standalone expression
@@ -740,8 +764,6 @@ resolve_scope :: proc(iter: ^TokenIter) -> (scope_node: ^AstNode, ok: bool) {
 		}
 		next_token(iter)
 	}
-
-	log(.Debug, "After resolving_scope: ", fmt.tprint(current_token(iter).type))
 
 	return scope_node, true
 }
