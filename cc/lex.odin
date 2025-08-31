@@ -24,6 +24,7 @@ TokenType :: enum {
 	T_MINUS,
 	T_STAR,
 	T_FSLASH,
+	T_PERCENT,
 	T_TILDE,
 	T_EXCLAMATION,
 	T_LESS,
@@ -76,6 +77,8 @@ is_special_symbol :: proc(symbol: rune) -> (bool, TokenType) {
 			return true, TokenType.T_STAR
 		case '/':
 			return true, TokenType.T_FSLASH
+		case '%':
+			return true, TokenType.T_PERCENT
 		case '<':
 			return true, TokenType.T_LESS
 		case '>':

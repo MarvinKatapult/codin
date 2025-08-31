@@ -88,6 +88,7 @@ Operator :: enum {
 	OP_BINARY_MINUS,
 	OP_BINARY_MULT,
 	OP_BINARY_DIV,
+	OP_BINARY_MOD,
 	OP_BINARY_LESS,
 	OP_BINARY_LESS_EQUAL,
 	OP_BINARY_GREATER,
@@ -157,6 +158,7 @@ get_operator_for_token :: proc(token: ^Token, unary: bool) -> (Operator, bool) {
 		case .T_PLUS:			return .OP_BINARY_PLUS,			 true
 		case .T_STAR:			return .OP_BINARY_MULT,			 true
 		case .T_FSLASH:			return .OP_BINARY_DIV,			 true
+		case .T_PERCENT:		return .OP_BINARY_MOD,			 true
 		case .T_TILDE:			return .OP_BIT_NEGATION,		 true
 		case .T_EXCLAMATION:	return .OP_LOGICAL_NOT,			 true
 		case .T_GREATER:		return .OP_BINARY_GREATER,		 true
@@ -260,7 +262,7 @@ resolve_expr_dot :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible :=
 	token_left(iter) or_return 
 
 	// * /
-	for current_token(iter).type == .T_STAR || current_token(iter).type == .T_FSLASH {
+	for current_token(iter).type == .T_STAR || current_token(iter).type == .T_FSLASH || current_token(iter).type == .T_PERCENT {
 		op_token := current_token(iter)
 		next_token(iter)
 		

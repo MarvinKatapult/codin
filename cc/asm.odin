@@ -100,6 +100,13 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 			strings.write_string(str_b, "\tmov rax, rdx	; moving rdx in rax\n")
 			strings.write_string(str_b, "\tcqo\t\t; Expand RAX to RAX:RDX 128 Bit Register\n")
 			strings.write_string(str_b, "\tidiv rcx\t; RAX = RAX / RCX\n")
+		case .OP_BINARY_MOD:
+			strings.write_string(str_b, "\tmov rdx, rdi	; Moving rdi to rdx\n")
+			strings.write_string(str_b, "\tmov rcx, rax	; Moving rax to rcx\n")
+			strings.write_string(str_b, "\tmov rax, rdx	; moving rdx in rax\n")
+			strings.write_string(str_b, "\tcqo\t\t; Expand RAX to RAX:RDX 128 Bit Register\n")
+			strings.write_string(str_b, "\tidiv rcx\t; RAX = RAX / RCX\n")
+			strings.write_string(str_b, "\tmov rax, rdx\t; Move remainder into rax\n")
 		case .OP_BINARY_LESS:
 			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax < rdi\n")
 			strings.write_string(str_b, "\tsetl al\t\t; Set al to 1 if true\n")
