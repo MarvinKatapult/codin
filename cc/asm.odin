@@ -47,7 +47,7 @@ generate_asm_for_if :: proc(str_b: ^strings.Builder, if_node: ^AstNode, func_sco
 
 	// Checking condition
 	if !generate_asm_for_expr(str_b, if_node.childs[0], func_scope) do return false
-	strings.write_string(str_b, "\tcmp rax, 0\t; Check if condition is false\n")
+	strings.write_string(str_b, "\tcmp rax, 0\t; IF Check if condition is false\n")
 	strings.write_string(str_b, "\tje ")
 	potential_else := write_label(str_b, func_scope, advance = true)
 	strings.write_string(str_b, "\t\t; Jump over scope if condition is false\n")
@@ -59,14 +59,29 @@ generate_asm_for_if :: proc(str_b: ^strings.Builder, if_node: ^AstNode, func_sco
 	end_of_if_scope := write_label(str_b, func_scope, advance = true)
 	strings.write_string(str_b, "\t\t; Jump to end of if-statement\n\n")
 
-	strings.write_string(str_b, fmt.tprintf("\t.L%d:\t\t; Potential Else\n\n", potential_else))
+	strings.write_string(str_b, fmt.tprintf("\t.L%d:\t\t; Potential else-if or else\n\n", potential_else))
 
-	for child, i in if_node.childs {
+	for else_or_else_if, i in if_node.childs {
 		if i <= 1 do continue // Skip condition and scope node
 		// Here are nodes such as else and else if
+		if else_or_else_if.type == .AST_ELSE_IF {
+			if !generate_asm_for_expr(str_b, else_or_else_if.childs[0], func_scope) do return false
+			strings.write_string(str_b, "\tcmp rax, 0\t; ELSE-IF Check if condition is false\n")
+			strings.write_string(str_b, "\tje ")
+			potential_else := write_label(str_b, func_scope, advance = true)
+			strings.write_string(str_b, "\t\t; Jump over scope if condition is false\n")
 
-		if child.type == .AST_ELSE {
-			generate_asm_for_scope(str_b, child.childs[0], func_scope) or_return
+			generate_asm_for_scope(str_b, else_or_else_if.childs[1], func_scope) or_return
+
+			strings.write_string(str_b, "\tjmp .L")
+			strings.write_int(str_b, end_of_if_scope)
+			strings.write_string(str_b, "\t\t; Jump to end of if-statement\n\n")
+
+			strings.write_string(str_b, fmt.tprintf("\t.L%d:\t\t; Potential else-if or else\n\n", potential_else))
+		}
+
+		if else_or_else_if.type == .AST_ELSE {
+			generate_asm_for_scope(str_b, else_or_else_if.childs[0], func_scope) or_return
 		}
 	}
 
@@ -412,9 +427,10 @@ compile_asm :: proc(asm_str: string, src_name: string, bin_name: string) -> bool
 	if err != nil {
 		log(.Error, "FASM could not be started!\nFasm is a dependency of this C compiler:\nhttps://flatassembler.net/")
 		return false
-	} else {
-		log(.Proto, "Compiling of file ", bin_name, " was successful!")
 	}
+
+	log(.Proto, "Compiling of file ", bin_name, " was successful!")
+
 	// r-xr-xr-x
 	if os2.chmod(bin_name, 0o755) != nil {
 		log(.Error, "File rights of ", bin_name, " could not be set properly!")

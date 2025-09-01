@@ -23,6 +23,7 @@ NodeType :: enum {
 	AST_EXPR_VARIABLE,
 	AST_IF,
 	AST_ELSE,
+	AST_ELSE_IF,
 }
 
 @(private="package")
@@ -697,14 +698,36 @@ resolve_statement :: proc(iter: ^TokenIter) -> (node: ^AstNode, ok: bool) {
 			return node, false
 		}
 
-		expr := resolve_expr(node, iter, no_expr_possible = true) or_return
+		expr := resolve_expr(node, iter, no_expr_possible = false) or_return
 		append_ast_node(node, expr)
 
 		if_scope := resolve_scope(iter) or_return
 		append_ast_node(node, if_scope)
 
-		if look_ahead_token(iter).type == .T_ELSE {
+		for look_ahead_token(iter).type == .T_ELSE {
 			next_token(iter) // else
+
+			if look_ahead_token(iter).type == .T_IF {
+				next_token(iter) // IF
+				next_token(iter) // ()
+				else_if_node := new(AstNode)
+				else_if_node.type = .AST_ELSE_IF
+				
+				if current_token(iter).type != .T_OPEN_PARANTHESIS {
+					log_error_with_token(current_token(iter)^, "else-if-statement condition has to be wrapped in (...)")
+					return node, false
+				}
+
+				expr := resolve_expr(else_if_node, iter, no_expr_possible = false) or_return
+				append_ast_node(else_if_node, expr)
+
+				else_if_scope := resolve_scope(iter) or_return
+				append_ast_node(else_if_node, else_if_scope)
+
+				append_ast_node(node, else_if_node)
+
+				continue
+			}
 
 			else_node := new(AstNode)
 			else_node.type = .AST_ELSE
@@ -714,6 +737,7 @@ resolve_statement :: proc(iter: ^TokenIter) -> (node: ^AstNode, ok: bool) {
 
 			else_scope := resolve_scope(iter) or_return
 			append_ast_node(else_node, else_scope)
+			break
 		}
 
 		return node, ok
