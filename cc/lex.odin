@@ -18,6 +18,7 @@ TokenType :: enum {
 	T_VOID_KEYWORD,
 	T_IF,
 	T_ELSE,
+	T_WHILE,
 	T_IDENTIFIER,
 	T_INT_LITERAL,
 	T_PLUS,
@@ -111,6 +112,8 @@ is_keyword :: proc(s: string) -> (bool, TokenType) {
 			return true, TokenType.T_IF
 		case "else":
 			return true, TokenType.T_ELSE
+		case "while":
+			return true, TokenType.T_WHILE
 	}
 	return false, TokenType.T_IDENTIFIER
 }

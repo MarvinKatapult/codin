@@ -91,6 +91,33 @@ generate_asm_for_if :: proc(str_b: ^strings.Builder, if_node: ^AstNode, func_sco
 }
 
 @(private="file")
+generate_asm_for_while :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, func_scope: ^FunctionScope) -> bool {
+	assert(len(statement_node.childs) == 2)
+	
+	condition_node := statement_node.childs[0]
+	scope_node     := statement_node.childs[1]
+
+	strings.write_string(str_b, "\t")
+	before_condition := write_label(str_b, func_scope, advance = true)
+	strings.write_string(str_b, ":\t; while condition\n\n")
+
+	generate_asm_for_expr(str_b, condition_node, func_scope) or_return
+
+	strings.write_string(str_b, "\tcmp rax, 0\t; Check if condition is false\n")
+	strings.write_string(str_b, "\tje ")
+	after_while := write_label(str_b, func_scope, advance = true)
+	strings.write_string(str_b, "\t\t; Jump to end of while\n\n")
+
+	generate_asm_for_scope(str_b, scope_node, func_scope) or_return
+	
+	strings.write_string(str_b, fmt.tprintf("\tjmp .L%d\t\t; Jump to begin of while\n\n", before_condition))
+
+	strings.write_string(str_b, fmt.tprintf("\t.L%d:\t\t; End of while\n\n", after_while))
+
+	return true
+}
+
+@(private="file")
 generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^AstNode, func_scope: ^FunctionScope) -> bool {
 
 	expression_t := expression_node.value.(AstExpression)
@@ -318,7 +345,9 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 			strings.write_string(str_b, statement_t.identifier)
 			strings.write_string(str_b, "\n\n")
 		case .AST_IF:
-			if !generate_asm_for_if(str_b, statement_node, func_scope) do return false
+			generate_asm_for_if(str_b, statement_node, func_scope) or_return
+		case .AST_WHILE:
+			generate_asm_for_while(str_b, statement_node, func_scope) or_return
 	}
 
 	return true

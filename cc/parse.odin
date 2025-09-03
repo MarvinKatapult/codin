@@ -24,6 +24,7 @@ NodeType :: enum {
 	AST_IF,
 	AST_ELSE,
 	AST_ELSE_IF,
+	AST_WHILE,
 }
 
 @(private="package")
@@ -739,6 +740,26 @@ resolve_statement :: proc(iter: ^TokenIter) -> (node: ^AstNode, ok: bool) {
 			append_ast_node(else_node, else_scope)
 			break
 		}
+
+		return node, ok
+	}
+
+	if !parsed_stmt && current_token(iter).type == .T_WHILE {
+		parsed_stmt = true
+		next_token(iter)
+
+		if current_token(iter).type != .T_OPEN_PARANTHESIS {
+			log_error_with_token(current_token(iter)^, "while-loop condition has to be wrapped in (...)")
+			return node, false
+		}
+
+		node.type = .AST_WHILE
+
+		expr := resolve_expr(node, iter, no_expr_possible = false) or_return
+		append_ast_node(node, expr)
+
+		while_scope := resolve_scope(iter) or_return
+		append_ast_node(node, while_scope)
 
 		return node, ok
 	}
