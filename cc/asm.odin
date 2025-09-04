@@ -152,27 +152,33 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 		case .OP_BINARY_LESS:
 			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax < rdi\n")
 			strings.write_string(str_b, "\tsetl al\t\t; Set al to 1 if true\n")
+			strings.write_string(str_b, "\tmovsx rax, al\t; Extend al to rax\n")
 		case .OP_BINARY_LESS_EQUAL:
 			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax <= rdi\n")
 			strings.write_string(str_b, "\tsetle al\t\t; Set al to 1 if true\n")
+			strings.write_string(str_b, "\tmovsx rax, al\t; Extend al to rax\n")
 		case .OP_BINARY_GREATER:
 			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax > rdi\n")
 			strings.write_string(str_b, "\tsetg al\t\t; Set al to 1 if true\n")
+			strings.write_string(str_b, "\tmovsx rax, al\t; Extend al to rax\n")
 		case .OP_BINARY_GREATER_EQUAL:
 			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax >= rdi\n")
 			strings.write_string(str_b, "\tsetge al\t\t; Set al to 1 if true\n")
+			strings.write_string(str_b, "\tmovsx rax, al\t; Extend al to rax\n")
 		case .OP_BINARY_EQUAL:
 			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax == rdi\n")
 			strings.write_string(str_b, "\tsete al\t\t; Set al to 1 if true\n")
+			strings.write_string(str_b, "\tmovsx rax, al\t; Extend al to rax\n")
 		case .OP_BINARY_NOT_EQUAL:
 			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax != rdi\n")
 			strings.write_string(str_b, "\tsetne al\t; Set al to 1 if true\n")
-		case .OP_LOGICAL_OR:
-			strings.write_string(str_b, "\ttest rdi, rdi\t; Check if rdi != 0\n")
-			strings.write_string(str_b, "\tsetnz dl\t; dl = (rdi != 0) ? 1 : 0\n")
-			strings.write_string(str_b, "\tjnz ")
-			write_label(str_b, func_scope)
-			strings.write_string(str_b, "\t\t; Short Circuit Evaluation\n")
+				strings.write_string(str_b, "\tmovsx rax, al\t; Extend al to rax\n")
+			case .OP_LOGICAL_OR:
+				strings.write_string(str_b, "\ttest rdi, rdi\t; Check if rdi != 0\n")
+				strings.write_string(str_b, "\tsetnz dl\t; dl = (rdi != 0) ? 1 : 0\n")
+				strings.write_string(str_b, "\tjnz ")
+				write_label(str_b, func_scope)
+				strings.write_string(str_b, "\t\t; Short Circuit Evaluation\n")
 			strings.write_string(str_b, "\ttest rax, rax\t; Check if rax != 0\n")
 			strings.write_string(str_b, "\tsetnz al \t; al = 1 if 0F == 1 else = 0\n")
 			strings.write_string(str_b, "\tor dl, al\t; Logical OR\n\t")
