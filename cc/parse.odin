@@ -25,6 +25,7 @@ NodeType :: enum {
 	AST_ELSE,
 	AST_ELSE_IF,
 	AST_WHILE,
+	AST_FOR,
 	AST_BREAK,
 }
 
@@ -106,6 +107,7 @@ Operator :: enum {
 
 ParseInfo :: struct {
 	break_possible: bool,
+	no_semicolon: bool,
 }
 
 @(private="package")
@@ -119,7 +121,7 @@ next_token :: proc(iter: ^TokenIter, place := #caller_location, fail := true) ->
 	iter.i += 1
 	if iter.i >= len(iter.tokens) {
 		if fail {
-			log(.Error, "Ran out of token", place = place)
+			log(.Error, "Unexpected end of tokens", place = place)
 			os.exit(-1)
 		}
 		return nil
@@ -783,6 +785,56 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 		return node, ok
 	}
 
+	if !parsed_stmt && current_token(iter).type == .T_FOR {
+		parsed_stmt = true
+
+		next_token(iter)
+
+		if current_token(iter).type != .T_OPEN_PARANTHESIS {
+			log_error_with_token(current_token(iter)^, "for-loop condition has to be wrapped in (...)")
+			return node, false
+		}
+
+		node.type = .AST_FOR
+
+		next_token(iter) // Skip (
+
+		// TODO: Call resolve_statement with only declarations and assignments being allowed
+		statement := resolve_statement(iter, parse_info) or_return
+		append_ast_node(node, statement)
+
+		next_token(iter) // Skip ;
+
+		condition := resolve_expr(node, iter) or_return
+		append_ast_node(node, condition)
+
+		next_token(iter) // Skip ;
+
+		parse_info.no_semicolon = true
+		// We check for ) because if the last statement is empty, we cant parse it correctly
+		// e.g.        V This is not a valid statement otherwise
+		//      for (;;) {}
+		iteration: ^AstNode
+		if current_token(iter).type != .T_CLOSE_PARANTHESIS {
+			iteration = resolve_statement(iter, parse_info) or_return
+		}
+		append_ast_node(node, iteration)
+		parse_info.no_semicolon = false
+
+		if current_token(iter).type != .T_CLOSE_PARANTHESIS {
+			log_error_with_token(current_token(iter)^, "for-loop condition has to be wrapped in (...)")
+			return node, false
+		}
+		next_token(iter) // Skip )
+
+		parse_info.break_possible = true
+		scope := resolve_scope(iter, parse_info) or_return
+		append_ast_node(node, scope)
+		parse_info.break_possible = false
+
+		return node, ok
+	}
+
 	// Standalone expression
 	if !parsed_stmt {
 		expr_node, ok := resolve_expr(node, iter)
@@ -798,7 +850,7 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 	}
 
 	// Statement ends with semicolon
-	if current_token(iter).type != .T_SEMICOLON {
+	if current_token(iter).type != .T_SEMICOLON && !parse_info.no_semicolon {
 		log_error_with_token(current_token(iter)^, "Statement has to end with ;")
 		return node, false
 	}

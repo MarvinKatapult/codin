@@ -121,6 +121,47 @@ generate_asm_for_while :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 }
 
 @(private="file")
+generate_asm_for_for :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, func_scope: ^FunctionScope) -> bool {
+
+	begin_node := statement_node.childs[0]
+	condition  := statement_node.childs[1]
+	iteration  := statement_node.childs[2]
+	scope      := statement_node.childs[3]
+
+	if begin_node.type != .AST_NOTHING {
+		generate_for_statement(str_b, begin_node, func_scope) or_return
+	}
+
+	strings.write_string(str_b, "\t")
+	before_condition := write_label(str_b, func_scope, advance = true)
+	strings.write_string(str_b, ":\t; for condition\n\n")
+
+	after_for := func_scope.label_count^
+	if condition.type != .AST_NOTHING {
+		generate_asm_for_expr(str_b, condition, func_scope) or_return
+
+		strings.write_string(str_b, "\tcmp rax, 0\t; Check if condition is false\n")
+		strings.write_string(str_b, "\tje ")
+		write_label(str_b, func_scope, advance = true)
+		strings.write_string(str_b, "\t\t; Jump to end of for\n\n")
+	}
+
+	func_scope.break_label = strings.clone(fmt.tprintf(".L%d", after_for))
+
+	generate_asm_for_scope(str_b, scope, func_scope) or_return
+
+	if iteration.type != .AST_NOTHING {
+		generate_for_statement(str_b, iteration, func_scope) or_return
+	}
+
+	strings.write_string(str_b, fmt.tprintf("\tjmp .L%d\t\t; Jump to begin of for\n\n", before_condition))
+
+	strings.write_string(str_b, fmt.tprintf("\t.L%d:\t\t; End of for\n\n", after_for))
+
+	return true
+}
+
+@(private="file")
 generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^AstNode, func_scope: ^FunctionScope) -> bool {
 
 	expression_t := expression_node.value.(AstExpression)
@@ -357,6 +398,8 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 			generate_asm_for_if(str_b, statement_node, func_scope) or_return
 		case .AST_WHILE:
 			generate_asm_for_while(str_b, statement_node, func_scope) or_return
+		case .AST_FOR:
+			generate_asm_for_for(str_b, statement_node, func_scope) or_return
 		case .AST_BREAK:
 			strings.write_string(str_b, "\tjmp ")
 			strings.write_string(str_b, func_scope.break_label)
