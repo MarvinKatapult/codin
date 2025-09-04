@@ -13,6 +13,7 @@ FunctionScope :: struct {
 	label: string,
 	label_count: ^int,
 	rbp_offset: ^int,
+	break_label: string,
 }
 
 @(private="file")
@@ -107,6 +108,8 @@ generate_asm_for_while :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 	strings.write_string(str_b, "\tje ")
 	after_while := write_label(str_b, func_scope, advance = true)
 	strings.write_string(str_b, "\t\t; Jump to end of while\n\n")
+
+	func_scope.break_label = strings.clone(fmt.tprintf(".L%d", after_while))
 
 	generate_asm_for_scope(str_b, scope_node, func_scope) or_return
 	
@@ -354,6 +357,10 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 			generate_asm_for_if(str_b, statement_node, func_scope) or_return
 		case .AST_WHILE:
 			generate_asm_for_while(str_b, statement_node, func_scope) or_return
+		case .AST_BREAK:
+			strings.write_string(str_b, "\tjmp ")
+			strings.write_string(str_b, func_scope.break_label)
+			strings.write_string(str_b, "\t; Break\n\n")
 	}
 
 	return true

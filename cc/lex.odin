@@ -42,6 +42,7 @@ TokenType :: enum {
 	T_LOGICAL_OR,
 	T_SHIFT_LEFT,
 	T_SHIFT_RIGHT,
+	T_BREAK,
 }
 
 @(private="package")
@@ -114,6 +115,8 @@ is_keyword :: proc(s: string) -> (bool, TokenType) {
 			return true, TokenType.T_ELSE
 		case "while":
 			return true, TokenType.T_WHILE
+		case "break":
+			return true, TokenType.T_BREAK
 	}
 	return false, TokenType.T_IDENTIFIER
 }

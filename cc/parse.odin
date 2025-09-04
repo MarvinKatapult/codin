@@ -25,6 +25,7 @@ NodeType :: enum {
 	AST_ELSE,
 	AST_ELSE_IF,
 	AST_WHILE,
+	AST_BREAK,
 }
 
 @(private="package")
@@ -101,6 +102,10 @@ Operator :: enum {
 	OP_BINARY_NOT_EQUAL,
 	OP_LOGICAL_OR,
 	OP_LOGICAL_AND,
+}
+
+ParseInfo :: struct {
+	break_possible: bool,
 }
 
 @(private="package")
@@ -611,7 +616,7 @@ resolving_assignment :: proc(root: ^AstNode, iter: ^TokenIter) -> bool {
 }
 
 @(private="package")
-resolve_statement :: proc(iter: ^TokenIter) -> (node: ^AstNode, ok: bool) {
+resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^AstNode, ok: bool) {
 
 	statement_t: AstStatement
 	node = new(AstNode)
@@ -624,9 +629,19 @@ resolve_statement :: proc(iter: ^TokenIter) -> (node: ^AstNode, ok: bool) {
 		return node, false
 	}
 
+	if !parsed_stmt && current_token(iter).type == .T_BREAK {
+		parsed_stmt = true
+		node.type = .AST_BREAK
+		if !parse_info.break_possible {
+			log_error_with_token(current_token(iter)^, "Break only possible in switch or loop")
+			return node, false
+		}
+		next_token(iter)
+	}
+
 	// Inner Scope
 	if !parsed_stmt && current_token(iter).type == .T_OPEN_BRACE {
-		node, ok = resolve_scope(iter)
+		node, ok = resolve_scope(iter, parse_info)
 		return node, ok
 	}
 
@@ -702,7 +717,7 @@ resolve_statement :: proc(iter: ^TokenIter) -> (node: ^AstNode, ok: bool) {
 		expr := resolve_expr(node, iter, no_expr_possible = false) or_return
 		append_ast_node(node, expr)
 
-		if_scope := resolve_scope(iter) or_return
+		if_scope := resolve_scope(iter, parse_info) or_return
 		append_ast_node(node, if_scope)
 
 		for look_ahead_token(iter).type == .T_ELSE {
@@ -722,7 +737,7 @@ resolve_statement :: proc(iter: ^TokenIter) -> (node: ^AstNode, ok: bool) {
 				expr := resolve_expr(else_if_node, iter, no_expr_possible = false) or_return
 				append_ast_node(else_if_node, expr)
 
-				else_if_scope := resolve_scope(iter) or_return
+				else_if_scope := resolve_scope(iter, parse_info) or_return
 				append_ast_node(else_if_node, else_if_scope)
 
 				append_ast_node(node, else_if_node)
@@ -736,7 +751,7 @@ resolve_statement :: proc(iter: ^TokenIter) -> (node: ^AstNode, ok: bool) {
 
 			next_token(iter)  // {
 
-			else_scope := resolve_scope(iter) or_return
+			else_scope := resolve_scope(iter, parse_info) or_return
 			append_ast_node(else_node, else_scope)
 			break
 		}
@@ -758,8 +773,12 @@ resolve_statement :: proc(iter: ^TokenIter) -> (node: ^AstNode, ok: bool) {
 		expr := resolve_expr(node, iter, no_expr_possible = false) or_return
 		append_ast_node(node, expr)
 
-		while_scope := resolve_scope(iter) or_return
+		parse_info.break_possible = true
+
+		while_scope := resolve_scope(iter, parse_info) or_return
 		append_ast_node(node, while_scope)
+
+		parse_info.break_possible = false
 
 		return node, ok
 	}
@@ -788,7 +807,7 @@ resolve_statement :: proc(iter: ^TokenIter) -> (node: ^AstNode, ok: bool) {
 }
 
 @(private="package")
-resolve_function :: proc(root: ^AstNode, iter: ^TokenIter) -> (node: ^AstNode, ok: bool) {
+resolve_function :: proc(root: ^AstNode, iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^AstNode, ok: bool) {
 	node = new(AstNode)
 	node.type = .AST_FUNCTION
 
@@ -845,7 +864,7 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter) -> (node: ^AstNode, o
 
 	node.value = function_t
 	scope: ^AstNode
-	scope, ok = resolve_scope(iter)
+	scope, ok = resolve_scope(iter, parse_info)
 	append_ast_node(node, scope)
 	if !ok {
 		return node, false
@@ -854,7 +873,7 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter) -> (node: ^AstNode, o
 	return node, true
 }
 
-resolve_scope :: proc(iter: ^TokenIter) -> (scope_node: ^AstNode, ok: bool) {
+resolve_scope :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (scope_node: ^AstNode, ok: bool) {
 	scope_t: AstScope
 	scope_node = new(AstNode)
 	scope_node.type = .AST_SCOPE
@@ -865,7 +884,7 @@ resolve_scope :: proc(iter: ^TokenIter) -> (scope_node: ^AstNode, ok: bool) {
 
 	// int foo(void) {...}
 	for current_token(iter).type != .T_CLOSE_BRACE {
-		statement_node, ok := resolve_statement(iter)
+		statement_node, ok := resolve_statement(iter, parse_info)
 		append_ast_node(scope_node, statement_node)
 
 		if !ok {
@@ -886,8 +905,11 @@ build_ast :: proc(tokens: []Token) -> (bool, ^AstNode) {
 		tokens = tokens
 	}
 
+	parse_info: ParseInfo
+	// Later this struct will be filled by preprocessor, etc...
+
 	for iter.i < len(iter.tokens) {
-		node, ok := resolve_function(root, &iter)
+		node, ok := resolve_function(root, &iter, &parse_info)
 		append_ast_node(root, node)
 		if !ok {
 			log(.Error, "Could not resolve function: Aborting")
