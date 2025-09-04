@@ -1,18 +1,18 @@
 # Bugs
 - Scope-Bug
 - Function should have to have return statement
+- Can not only write assignments and declarations in for loop
 
 # 1
-- else if
 - Refactor Parsing of Operators
-- for loop
-- while loop
 - Assigment Binary Operators (+=, ...)
+- Post and Prefix Operator
 
 # 2
+- Function Calls
+- Datatypes
 - typedef
 - Preprocessor
 - Structs
 - Unions
-- Function Calls
 - Pointer
