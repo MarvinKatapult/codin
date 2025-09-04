@@ -1,30 +1,28 @@
 # Codin
 
-This is my hobby C Compiler project written in Odin!
-
-I always wanted to build a C Compiler so this is it.
-
-It's not finished and even if it was, it wouldn't be good, but that's not the goal of this project.
+Unfinished C-Compiler written in Odin
 
 ## Dependencies
 - Odin
 - Fasm
 
-## Highest level code we can compile
+## Highest level code supported by compiler
 ```c
 int main(void) {
-    int a = (3 - 2) * 2;
-    int b;
-    {
-        int c = a * 3;
-        if (c + 1) {
-            c = 69 + 420;
-        } else {
-            c = 1337 * 2;
+    // We only have signed integers (64-bit)
+    int a = 0;
+    int b = 0;
+    while (a < 100) {
+        if (!(a % 2)) {
+            b = b + a;
         }
-        b = 4 * c | 2 && 1;
+        a = a + 1;
+
+        if (b > 1000) {
+            break;
+        }
     }
-    ;;;;
-    return b ^ 1;
+    
+    return b;
 }
 ```
