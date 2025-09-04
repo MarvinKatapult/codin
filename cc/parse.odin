@@ -814,7 +814,7 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 		// We check for ) because if the last statement is empty, we cant parse it correctly
 		// e.g.        V This is not a valid statement otherwise
 		//      for (;;) {}
-		iteration: ^AstNode
+		iteration := new(AstNode)
 		if current_token(iter).type != .T_CLOSE_PARANTHESIS {
 			iteration = resolve_statement(iter, parse_info) or_return
 		}
