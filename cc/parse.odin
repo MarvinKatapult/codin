@@ -729,7 +729,7 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 		parsed_stmt = true
 	}
 
-	if !parsed_stmt {
+	if !parsed_stmt && current_token(iter).type == .T_INT_KEYWORD {
 		node, parsed_stmt = resolve_integer_declaration(iter, parse_info)
 	}
 
@@ -865,7 +865,33 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 		return node, ok
 	}
 
-	// Standalone expression
+	// Variable Assignment
+	if !parsed_stmt && current_token(iter).type == .T_IDENTIFIER {
+		parsed_stmt = true
+		node.type = .AST_VAR_ASSIGNMENT
+
+		if look_ahead_token(iter).type == .T_ASSIGNMENT {
+			next_token(iter)
+			if !resolving_assignment(node, iter) {
+				return node, false
+			}
+		} else {
+			// TODO: Duplicate code with Standalone expression - see:bottom
+			expr_node, ok := resolve_expr(node, iter)
+			if ok && expr_node.type != .AST_NOTHING {
+				append_ast_node(node, expr_node)
+				parsed_stmt = true
+				node.type = .AST_EXPR_STATEMENT
+			}
+
+			if expr_node.type == .AST_NOTHING {
+				parsed_stmt = true
+			}
+		}
+
+	}
+
+	// Standalone expression (Yes see here)
 	if !parsed_stmt {
 		expr_node, ok := resolve_expr(node, iter)
 		if ok && expr_node.type != .AST_NOTHING {
@@ -876,22 +902,6 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 
 		if expr_node.type == .AST_NOTHING {
 			parsed_stmt = true
-		}
-	}
-
-	// Variable Assignment
-	if !parsed_stmt && current_token(iter).type == .T_IDENTIFIER {
-		parsed_stmt = true
-		node.type = .AST_VAR_ASSIGNMENT
-		next_token(iter)
-
-		if current_token(iter).type != .T_ASSIGNMENT {
-			log_error_with_token(current_token(iter)^, "Expected = Token while got ")
-			return node, false
-		}
-
-		if !resolving_assignment(node, iter) {
-			return node, false
 		}
 	}
 
