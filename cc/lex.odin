@@ -44,6 +44,7 @@ TokenType :: enum {
 	T_SHIFT_LEFT,
 	T_SHIFT_RIGHT,
 	T_BREAK,
+	T_COMMA,
 }
 
 @(private="package")
@@ -96,6 +97,8 @@ is_special_symbol :: proc(symbol: rune) -> (bool, TokenType) {
 			return true, TokenType.T_BIT_OR
 		case '^':
 			return true, TokenType.T_BIT_XOR
+		case ',':
+			return true, TokenType.T_COMMA
 	}
 
 	return false, nil

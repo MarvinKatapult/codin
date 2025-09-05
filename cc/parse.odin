@@ -21,6 +21,7 @@ NodeType :: enum {
 	AST_EXPR_UNARY,
 	AST_EXPR_BINARY,
 	AST_EXPR_VARIABLE,
+	AST_FUNC_CALL,
 	AST_IF,
 	AST_ELSE,
 	AST_ELSE_IF,
@@ -106,8 +107,10 @@ Operator :: enum {
 }
 
 ParseInfo :: struct {
+	functions: [dynamic]AstFunction,
 	break_possible: bool,
 	no_semicolon: bool,
+	no_declare_and_assign: bool,
 }
 
 @(private="package")
@@ -231,12 +234,35 @@ resolve_expr_primary :: proc(iter: ^TokenIter, no_expr_possible := true) -> (nod
 		return node, true
 	}
 
-	// foo
+	// foo (Either function or variable)
 	if current_token(iter).type == .T_IDENTIFIER {
 		expression_t: AstExpression
 		expression_t.value = strings.clone(current_token(iter).value)
 		node.value = expression_t
-		node.type = .AST_EXPR_VARIABLE
+
+		is_function_call := look_ahead_token(iter).type == .T_OPEN_PARANTHESIS 
+		if is_function_call {
+			node.type = .AST_FUNC_CALL
+
+			next_token(iter)
+			next_token(iter)
+
+			first_param := true
+			for current_token(iter).type != .T_CLOSE_PARANTHESIS {
+				if !first_param && current_token(iter).type != .T_COMMA {
+					log_error_with_token(current_token(iter)^, "Expected ','")
+					return node, false
+				}
+				if !first_param do next_token(iter)
+
+				first_param = false
+
+				expr := resolve_expr(node, iter, no_expr_possible = false) or_return
+				append_ast_node(node, expr)
+			}
+		} else {
+			node.type = .AST_EXPR_VARIABLE
+		}
 
 		next_token(iter)
 		return node, true
@@ -622,6 +648,42 @@ resolving_assignment :: proc(root: ^AstNode, iter: ^TokenIter) -> bool {
 	return true
 }
 
+@(private="file")
+resolve_integer_declaration :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^AstNode, ok: bool) {
+	// Integer Declaration
+	node = new(AstNode)
+	node.type = .AST_VAR_DECLARE
+	statement_t: AstStatement
+	node.value = statement_t
+	if current_token(iter).type == .T_INT_KEYWORD {
+		next_token(iter)
+
+		if current_token(iter).type != .T_IDENTIFIER {
+			log_error_with_token(current_token(iter)^, "Expected identifier after int keyword")
+			return node, false
+		}
+
+		statement_t.identifier = strings.clone(current_token(iter).value)
+		node.type = .AST_VAR_DECLARE
+		node.value = statement_t
+
+		next_token(iter)
+
+		if current_token(iter).type == .T_ASSIGNMENT {
+			assignment_node := new(AstNode)
+			append_ast_node(node, assignment_node)
+
+			if parse_info.no_declare_and_assign || !resolving_assignment(assignment_node, iter) {
+				return node, false
+			}
+		}
+
+		ok = true
+	}
+
+	return
+}
+
 @(private="package")
 resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^AstNode, ok: bool) {
 
@@ -667,47 +729,8 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 		parsed_stmt = true
 	}
 
-	// Integer Declaration
-	if !parsed_stmt && current_token(iter).type == .T_INT_KEYWORD {
-		next_token(iter)
-
-		if current_token(iter).type != .T_IDENTIFIER {
-			log_error_with_token(current_token(iter)^, "Expected identifier after int keyword")
-			return node, false
-		}
-
-		statement_t.identifier = strings.clone(current_token(iter).value)
-		node.type = .AST_VAR_DECLARE
-		node.value = statement_t
-
-		next_token(iter)
-
-		if current_token(iter).type == .T_ASSIGNMENT {
-			assignment_node := new(AstNode)
-			append_ast_node(node, assignment_node)
-
-			if !resolving_assignment(assignment_node, iter) {
-				return node, false
-			}
-		}
-
-		parsed_stmt = true
-	}
-
-	// Variable Assignment
-	if !parsed_stmt && current_token(iter).type == .T_IDENTIFIER {
-		parsed_stmt = true
-		node.type = .AST_VAR_ASSIGNMENT
-		next_token(iter)
-
-		if current_token(iter).type != .T_ASSIGNMENT {
-			log_error_with_token(current_token(iter)^, "Expected = Token while got ")
-			return node, false
-		}
-
-		if !resolving_assignment(node, iter) {
-			return node, false
-		}
+	if !parsed_stmt {
+		node, parsed_stmt = resolve_integer_declaration(iter, parse_info)
 	}
 
 	// if-statement
@@ -856,6 +879,22 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 		}
 	}
 
+	// Variable Assignment
+	if !parsed_stmt && current_token(iter).type == .T_IDENTIFIER {
+		parsed_stmt = true
+		node.type = .AST_VAR_ASSIGNMENT
+		next_token(iter)
+
+		if current_token(iter).type != .T_ASSIGNMENT {
+			log_error_with_token(current_token(iter)^, "Expected = Token while got ")
+			return node, false
+		}
+
+		if !resolving_assignment(node, iter) {
+			return node, false
+		}
+	}
+
 	// Statement ends with semicolon
 	if current_token(iter).type != .T_SEMICOLON && !parse_info.no_semicolon {
 		log_error_with_token(current_token(iter)^, "Statement has to end with ;")
@@ -867,10 +906,11 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 
 @(private="package")
 resolve_function :: proc(root: ^AstNode, iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^AstNode, ok: bool) {
+	function_t: AstFunction
 	node = new(AstNode)
 	node.type = .AST_FUNCTION
+	node.value = function_t
 
-	function_t: AstFunction
 
 	// int
 	if current_token(iter).type != .T_INT_KEYWORD {
@@ -898,20 +938,39 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter, parse_info: ^ParseInf
 
 	next_token(iter)
 
-	// int foo(void
-	if current_token(iter).type != .T_VOID_KEYWORD {
-		log_error_with_token(current_token(iter)^, "Function parameters have to be void for now" )
-		return node, false
+	// Parameter
+	first_parameter := true
+	for current_token(iter).type != .T_CLOSE_PARANTHESIS {
+		if first_parameter && current_token(iter).type == .T_VOID_KEYWORD {
+			if look_ahead_token(iter).type != .T_CLOSE_PARANTHESIS {
+				log_error_with_token(current_token(iter)^, "Expected end of parameters after 'void'")
+				return node, false
+			}
+			next_token(iter)
+			break;
+		}
+
+		if !first_parameter && current_token(iter).type == .T_COMMA {
+			next_token(iter)
+		}
+
+		first_parameter = false
+
+		parse_info.no_declare_and_assign = true
+		declaration, ok := resolve_integer_declaration(iter, parse_info)
+		parse_info.no_declare_and_assign = false
+		if !ok {
+			log_error_with_token(current_token(iter)^, "Failed to parse integer declaration as parameter")
+			return node, false
+		}
+		append_ast_node(node, declaration)
+
+		if current_token(iter).type != .T_COMMA && current_token(iter).type != .T_CLOSE_PARANTHESIS {
+			log_error_with_token(current_token(iter)^, "Expected Comma or end of parameter list")
+			return node, false
+		}
 	}
 	function_t.params = strings.clone(current_token(iter).value)
-
-	next_token(iter)
-
-	// int foo(void)
-	if current_token(iter).type != .T_CLOSE_PARANTHESIS {
-		log_error_with_token(current_token(iter)^, "Expected \')\' after function parameter")
-		return node, false
-	}
 
 	next_token(iter)
 
@@ -969,7 +1028,9 @@ build_ast :: proc(tokens: []Token) -> (bool, ^AstNode) {
 
 	for iter.i < len(iter.tokens) {
 		node, ok := resolve_function(root, &iter, &parse_info)
+		append(&parse_info.functions, node.value.(AstFunction))
 		append_ast_node(root, node)
+
 		if !ok {
 			log(.Error, "Could not resolve function: Aborting")
 			return false, root

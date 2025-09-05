@@ -331,6 +331,12 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 			strings.write_string(str_b, "\tpop rdi\t\t; Popping Value to rdi off stack\n\n")
 
 			return generate_asm_for_operator(str_b, expression_node, func_scope)
+		case .AST_FUNC_CALL:
+			
+			strings.write_string(str_b, "\tcall ")
+			strings.write_string(str_b, expression_node.value.(AstExpression).value)
+			strings.write_string(str_b, "\t; Call Function\n\n")
+			return true
 	}
 
 	log(.Error, "Expression must be constant or unary expression!")
