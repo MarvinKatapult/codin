@@ -775,12 +775,12 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 		expr := resolve_expr(node, iter, no_expr_possible = false) or_return
 		append_ast_node(node, expr)
 
+		tmp := parse_info.break_possible
 		parse_info.break_possible = true
+		defer parse_info.break_possible = tmp
 
 		while_scope := resolve_scope(iter, parse_info) or_return
 		append_ast_node(node, while_scope)
-
-		parse_info.break_possible = false
 
 		return node, ok
 	}
@@ -827,10 +827,12 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 		}
 		next_token(iter) // Skip )
 
+		tmp := parse_info.break_possible
 		parse_info.break_possible = true
+		defer parse_info.break_possible = tmp
+
 		scope := resolve_scope(iter, parse_info) or_return
 		append_ast_node(node, scope)
-		parse_info.break_possible = false
 
 		return node, ok
 	}

@@ -109,11 +109,14 @@ generate_asm_for_while :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 	after_while := write_label(str_b, func_scope, advance = true)
 	strings.write_string(str_b, "\t\t; Jump to end of while\n\n")
 
+	old_label := func_scope.break_label
 	func_scope.break_label = strings.clone(fmt.tprintf(".L%d", after_while))
 
 	generate_asm_for_scope(str_b, scope_node, func_scope) or_return
+
+	func_scope.break_label = old_label
 	
-	strings.write_string(str_b, fmt.tprintf("\tjmp .L%d\t\t; Jump to begin of while\n\n", before_condition))
+	strings.write_string(str_b, fmt.tprintf("\tjmp .L%d\t\t; Jump to begin of while\n", before_condition))
 
 	strings.write_string(str_b, fmt.tprintf("\t.L%d:\t\t; End of while\n\n", after_while))
 
@@ -128,35 +131,44 @@ generate_asm_for_for :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
 	iteration  := statement_node.childs[2]
 	scope      := statement_node.childs[3]
 
+	old_variables := func_scope.variables
+	func_scope.variables = clone_variables(func_scope.variables)^
+
 	if begin_node.type != .AST_NOTHING {
-		generate_for_statement(str_b, begin_node, func_scope) or_return
+		generate_asm_for_statement(str_b, begin_node, func_scope) or_return
 	}
 
 	strings.write_string(str_b, "\t")
 	before_condition := write_label(str_b, func_scope, advance = true)
 	strings.write_string(str_b, ":\t; for condition\n\n")
 
-	after_for := func_scope.label_count^
 	if condition.type != .AST_NOTHING {
 		generate_asm_for_expr(str_b, condition, func_scope) or_return
 
 		strings.write_string(str_b, "\tcmp rax, 0\t; Check if condition is false\n")
 		strings.write_string(str_b, "\tje ")
-		write_label(str_b, func_scope, advance = true)
+		write_label(str_b, func_scope)
 		strings.write_string(str_b, "\t\t; Jump to end of for\n\n")
 	}
+	after_for := func_scope.label_count^
+	func_scope.label_count^ = func_scope.label_count^ + 1
 
+	old_label := func_scope.break_label
 	func_scope.break_label = strings.clone(fmt.tprintf(".L%d", after_for))
 
 	generate_asm_for_scope(str_b, scope, func_scope) or_return
 
+	func_scope.break_label = old_label
+
 	if iteration.type != .AST_NOTHING {
-		generate_for_statement(str_b, iteration, func_scope) or_return
+		generate_asm_for_statement(str_b, iteration, func_scope) or_return
 	}
 
-	strings.write_string(str_b, fmt.tprintf("\tjmp .L%d\t\t; Jump to begin of for\n\n", before_condition))
+	strings.write_string(str_b, fmt.tprintf("\tjmp .L%d\t\t; Jump to begin of for\n", before_condition))
 
 	strings.write_string(str_b, fmt.tprintf("\t.L%d:\t\t; End of for\n\n", after_for))
+
+	func_scope.variables = old_variables
 
 	return true
 }
@@ -338,7 +350,7 @@ calc_value_of_expression :: proc(str_b: ^strings.Builder,
 }
 
 @(private="file")
-generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
+generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
 							   func_scope: ^FunctionScope) -> bool {
 	statement_t := statement_node.value.(AstStatement)
 
@@ -374,7 +386,7 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 			rbp_offset^ = rbp_offset^ - INT_BYTE_SIZE
 			func_scope.variables[statement_t.identifier] = strings.clone(fmt.tprintf("[rbp%d]", rbp_offset^))
 			if len(statement_node.childs) > 0 {
-				if !generate_for_statement(str_b, statement_node.childs[0], func_scope) {
+				if !generate_asm_for_statement(str_b, statement_node.childs[0], func_scope) {
 					return false
 				}
 			}
@@ -410,7 +422,7 @@ generate_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 }
 
 @(private="file")
-clone_scope :: proc(p_scope: map[string]string) -> ^map[string]string {
+clone_variables :: proc(p_scope: map[string]string) -> ^map[string]string {
 	scope := new(map[string]string)
 
 	for binding in p_scope {
@@ -421,16 +433,32 @@ clone_scope :: proc(p_scope: map[string]string) -> ^map[string]string {
 }
 
 @(private="file")
+clone_func_scope :: proc(func_scope: ^FunctionScope) -> (ret: ^FunctionScope) {
+	ret = new(FunctionScope)
+	ret.variables = clone_variables(func_scope.variables)^
+	ret.label = func_scope.label
+
+	ret.rbp_offset = new(int)
+	ret.rbp_offset^ = func_scope.rbp_offset^
+
+	ret.label_count = func_scope.label_count
+
+	ret.break_label = strings.clone(func_scope.break_label)
+
+	return ret
+}
+
+@(private="file")
 generate_asm_for_scope :: proc(str_b: ^strings.Builder, scope_node: ^AstNode, 
 						   func_scope: ^FunctionScope) -> bool {
-	scope := new(map[string]string)
-	func_scope.variables = clone_scope(func_scope.variables)^
+
+	func_scope_clone := clone_func_scope(func_scope)
 
 	for child in scope_node.childs {
 		if child.type == .AST_SCOPE {
-			generate_asm_for_scope(str_b, child, func_scope) or_return
+			generate_asm_for_scope(str_b, child, func_scope_clone) or_return
 		} else {
-			generate_for_statement(str_b, child, func_scope) or_return
+			generate_asm_for_statement(str_b, child, func_scope_clone) or_return
 		}
 	}
 	return true
