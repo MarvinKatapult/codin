@@ -605,6 +605,11 @@ resolving_assignment :: proc(root: ^AstNode, iter: ^TokenIter) -> bool {
 	root.value = statement_t
 	root.type = .AST_VAR_ASSIGNMENT
 
+	if current_token(iter).type != .T_ASSIGNMENT {
+		log_error_with_token(current_token(iter)^, "Expected =")
+		return false
+	}
+
 	next_token(iter)
 
 	node, ok := resolve_expr(root, iter, no_expr_possible = false)
