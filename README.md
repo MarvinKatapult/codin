@@ -8,21 +8,33 @@ Unfinished C-Compiler written in Odin
 
 ## Highest level code supported by compiler
 ```c
-int main(void) {
-    // We only have signed integers (64-bit)
-    int a = 0;
-    int b = 0;
-    while (a < 100) {
-        if (!(a % 2)) {
-            b = b + a;
-        }
-        a = a + 1;
+int max(int a, int b) {
+    if (a > b) {
+        return a;
+    } 
+    return b;
+}
 
-        if (b > 1000) {
-            break;
-        }
+int main(void) {
+
+    int a = 3;
+    int b = 7;
+    int c = 1;
+
+    if (max(a, b) == a) {
+        int tmp = a;
+        a = b;
+        b = tmp;
+    }
+
+    if (max(b, c) == b) {
+        int tmp = a;
+        a = b;
+        b = tmp;
     }
     
-    return b;
+    int result = a | b | c;
+
+    return result;
 }
 ```
