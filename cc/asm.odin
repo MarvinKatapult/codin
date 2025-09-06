@@ -385,11 +385,13 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 
 			// Reset Memory from parameters on stack
 			mem_to_free_from_stack := abs(func_scope.rbp_offset^ - original_rbp_offset)
-			strings.write_string(str_b, "\tadd rsp, ")
-			strings.write_int(str_b, mem_to_free_from_stack)
-			strings.write_string(str_b, "\t; Resetting Stack for func call\n\n")
+			if mem_to_free_from_stack > 0 {
+				strings.write_string(str_b, "\tadd rsp, ")
+				strings.write_int(str_b, mem_to_free_from_stack)
+				strings.write_string(str_b, "\t; Resetting Stack for func call\n\n")
 
-			func_scope.rbp_offset^ += mem_to_free_from_stack
+				func_scope.rbp_offset^ += mem_to_free_from_stack
+			}
 
 			return true
 	}
