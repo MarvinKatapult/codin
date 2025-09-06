@@ -40,7 +40,7 @@ int main(void) {
 ```
 
 ## AST for example
-```
+```bash
 [AST_PROGRAM]
     [AST_FUNCTION] Int max
         [AST_VAR_DECLARE] a  
