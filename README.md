@@ -42,7 +42,7 @@ int main(void) {
 ## AST for example
 ```
 [AST_PROGRAM]
-    [AST_FUNCTION] Int max ) 
+    [AST_FUNCTION] Int max
         [AST_VAR_DECLARE] a  
         [AST_VAR_DECLARE] b  
         [AST_SCOPE] Parent: AST_FUNCTION 
@@ -55,7 +55,7 @@ int main(void) {
                         [AST_EXPR_VARIABLE] a OP Parent: AST_RETURN_STATEMENT 
             [AST_RETURN_STATEMENT]   
                 [AST_EXPR_VARIABLE] b OP Parent: AST_RETURN_STATEMENT 
-    [AST_FUNCTION] Int main ) 
+    [AST_FUNCTION] Int main 
         [AST_SCOPE] Parent: AST_FUNCTION 
             [AST_VAR_DECLARE] a  
                 [AST_VAR_ASSIGNMENT] a  
