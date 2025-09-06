@@ -177,7 +177,7 @@ lex :: proc(filename: string) -> [dynamic]Token {
 
 	filedata, ok := os.read_entire_file(filename)
 	if !ok {
-		fmt.println("Cant read file!")
+		log(.Error, "Cant read file!")
 		return nil
 	}
 	defer delete(filedata)
