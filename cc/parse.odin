@@ -55,8 +55,9 @@ AstFunction :: struct {
 
 @(private="package")
 AstStatement :: struct {
-	identifier:   string,
-	value:        string
+	identifier: string,
+	value:      string,
+	type:		AstDataType,
 }
 
 @(private="package")
@@ -132,6 +133,7 @@ next_token :: proc(iter: ^TokenIter, place := #caller_location, fail := true) ->
 	return &iter.tokens[iter.i]
 }
 
+@(private="file")
 look_ahead_token :: proc(iter: ^TokenIter, place := #caller_location, fail := true) -> ^Token {
 	if iter.i + 1 >= len(iter.tokens) {
 		if fail {
@@ -151,6 +153,7 @@ current_token :: proc(iter: ^TokenIter) -> ^Token {
 	return &iter.tokens[iter.i]
 }
 
+@(private="file")
 token_left :: proc(iter: ^TokenIter, place := #caller_location) -> bool {
 	if current_token(iter) == nil {
 		log(.Error, "Ran out of tokens whilst resolving statement: Aborting", place = place)
@@ -656,6 +659,8 @@ resolve_integer_declaration :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) ->
 	statement_t: AstStatement
 	node.value = statement_t
 	if current_token(iter).type == .T_INT_KEYWORD {
+		statement_t.type = .Int
+		node.value = statement_t
 		next_token(iter)
 
 		if current_token(iter).type != .T_IDENTIFIER {
@@ -1001,6 +1006,7 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter, parse_info: ^ParseInf
 	return node, true
 }
 
+@(private="file")
 resolve_scope :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (scope_node: ^AstNode, ok: bool) {
 	scope_t: AstScope
 	scope_node = new(AstNode)
