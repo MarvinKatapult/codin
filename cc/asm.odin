@@ -366,7 +366,6 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 			// Put parameters for call on stack
 			original_rbp_offset := func_scope.rbp_offset^
 			for child in expression_node.childs {
-				log(.Debug, fmt.tprint(child))
 				generate_asm_for_expr(str_b, child, func_scope, file_info) or_return
 
 				strings.write_string(str_b, "\tsub rsp, ")

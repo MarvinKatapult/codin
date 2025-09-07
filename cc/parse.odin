@@ -941,7 +941,6 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter, parse_info: ^ParseInf
 		return node, false
 	}
 	function_t.identifier = strings.clone(current_token(iter).value)
-	log(.Debug, fmt.tprint(function_t.identifier))
 
 	next_token(iter)
 
