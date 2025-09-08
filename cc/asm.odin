@@ -505,7 +505,7 @@ generate_asm_for_scope :: proc(str_b: ^strings.Builder, scope_node: ^AstNode,
 		if child.type == .AST_SCOPE {
 			generate_asm_for_scope(str_b, child, func_scope_clone, file_info) or_return
 		} else {
-		generate_asm_for_statement(str_b, child, func_scope_clone, file_info) or_return
+			generate_asm_for_statement(str_b, child, func_scope_clone, file_info) or_return
 		}
 	}
 	return true
