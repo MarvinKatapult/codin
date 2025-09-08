@@ -27,21 +27,11 @@ FunctionScope :: struct {
 }
 
 @(private="file")
-append_fasm_header :: proc(str_b: ^strings.Builder) -> bool {
-	strings.write_string(str_b,
-		"format ELF64 executable 3\n"
-	)
-	strings.write_string(str_b,
-		"entry start\n"
-	)
-	strings.write_string(str_b,
-		"\n"
-	)
-	strings.write_string(str_b,
-		"segment readable executable\n"
-	)
-
-	return true
+append_fasm_header :: proc(str_b: ^strings.Builder) {
+	strings.write_string(str_b, "format ELF64 executable 3\n")
+	strings.write_string(str_b, "entry start\n")
+	strings.write_string(str_b, "\n")
+	strings.write_string(str_b, "segment readable executable\n")
 }
 
 @(private="file")
@@ -54,7 +44,7 @@ write_label :: proc(str_b: ^strings.Builder, func_scope: ^FunctionScope, advance
 }
 
 @(private="file")
-generate_asm_for_if :: proc(str_b: ^strings.Builder, if_node: ^AstNode, 
+generate_asm_for_if :: proc(str_b: ^strings.Builder, if_node: ^AstNode,
 							func_scope: ^FunctionScope, file_info: ^FileInfo) -> bool {
 	assert(len(if_node.childs) >= 2)
 
@@ -104,10 +94,10 @@ generate_asm_for_if :: proc(str_b: ^strings.Builder, if_node: ^AstNode,
 }
 
 @(private="file")
-generate_asm_for_while :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
+generate_asm_for_while :: proc(str_b: ^strings.Builder, statement_node: ^AstNode,
 							   func_scope: ^FunctionScope, file_info: ^FileInfo) -> bool {
 	assert(len(statement_node.childs) == 2)
-	
+
 	condition_node := statement_node.childs[0]
 	scope_node     := statement_node.childs[1]
 
@@ -128,9 +118,8 @@ generate_asm_for_while :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 	generate_asm_for_scope(str_b, scope_node, func_scope, file_info) or_return
 
 	func_scope.break_label = old_label
-	
-	strings.write_string(str_b, fmt.tprintf("\tjmp .L%d\t\t; Jump to begin of while\n", before_condition))
 
+	strings.write_string(str_b, fmt.tprintf("\tjmp .L%d\t\t; Jump to begin of while\n", before_condition))
 	strings.write_string(str_b, fmt.tprintf("\t.L%d:\t\t; End of while\n\n", after_while))
 
 	return true
@@ -243,12 +232,12 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax != rdi\n")
 			strings.write_string(str_b, "\tsetne al\t; Set al to 1 if true\n")
 				strings.write_string(str_b, "\tmovsx rax, al\t; Extend al to rax\n")
-			case .OP_LOGICAL_OR:
-				strings.write_string(str_b, "\ttest rdi, rdi\t; Check if rdi != 0\n")
-				strings.write_string(str_b, "\tsetnz dl\t; dl = (rdi != 0) ? 1 : 0\n")
-				strings.write_string(str_b, "\tjnz ")
-				write_label(str_b, func_scope)
-				strings.write_string(str_b, "\t\t; Short Circuit Evaluation\n")
+		case .OP_LOGICAL_OR:
+			strings.write_string(str_b, "\ttest rdi, rdi\t; Check if rdi != 0\n")
+			strings.write_string(str_b, "\tsetnz dl\t; dl = (rdi != 0) ? 1 : 0\n")
+			strings.write_string(str_b, "\tjnz ")
+			write_label(str_b, func_scope)
+			strings.write_string(str_b, "\t\t; Short Circuit Evaluation\n")
 			strings.write_string(str_b, "\ttest rax, rax\t; Check if rax != 0\n")
 			strings.write_string(str_b, "\tsetnz al \t; al = 1 if 0F == 1 else = 0\n")
 			strings.write_string(str_b, "\tor dl, al\t; Logical OR\n\t")
@@ -368,14 +357,10 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 			for child in expression_node.childs {
 				generate_asm_for_expr(str_b, child, func_scope, file_info) or_return
 
-				strings.write_string(str_b, "\tsub rsp, ")
-				strings.write_int(str_b,	INT_BYTE_SIZE)
-				strings.write_string(str_b, "\t; Allocate memory on the stack\n\n")
+				strings.write_string(str_b, "\tpush rax\t; Allocate memory on the stack for parameter\n")
 
 				rbp_offset := func_scope.rbp_offset
 				rbp_offset^ = rbp_offset^ - INT_BYTE_SIZE
-
-				strings.write_string(str_b, fmt.tprintf("\tmov [rbp%d], rax\t; Mov value into stack as parameter\n\n", rbp_offset^))
 			}
 			
 			strings.write_string(str_b, "\tcall ")
@@ -426,7 +411,7 @@ generate_asm_for_var_declare :: proc(str_b: ^strings.Builder, statement_node: ^A
 
 @(private="file")
 generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
-							   func_scope: ^FunctionScope, file_info: ^FileInfo) -> bool {
+								   func_scope: ^FunctionScope, file_info: ^FileInfo) -> bool {
 	statement_t := statement_node.value.(AstStatement)
 
 	#partial switch statement_node.type {
@@ -508,7 +493,7 @@ clone_func_scope :: proc(func_scope: ^FunctionScope) -> (ret: ^FunctionScope) {
 
 @(private="file")
 generate_asm_for_scope :: proc(str_b: ^strings.Builder, scope_node: ^AstNode, 
-						   func_scope: ^FunctionScope, file_info: ^FileInfo) -> bool {
+							   func_scope: ^FunctionScope, file_info: ^FileInfo) -> bool {
 
 	func_scope_clone := clone_func_scope(func_scope)
 
@@ -516,7 +501,7 @@ generate_asm_for_scope :: proc(str_b: ^strings.Builder, scope_node: ^AstNode,
 		if child.type == .AST_SCOPE {
 			generate_asm_for_scope(str_b, child, func_scope_clone, file_info) or_return
 		} else {
-			generate_asm_for_statement(str_b, child, func_scope_clone, file_info) or_return
+		generate_asm_for_statement(str_b, child, func_scope_clone, file_info) or_return
 		}
 	}
 	return true
@@ -559,7 +544,7 @@ generate_asm_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNo
 			if !generate_asm_for_scope(str_b, child, &func_scope, file_info) do return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -602,7 +587,7 @@ generate_asm :: proc(ast: ^AstNode) -> string {
 
 	file_info: FileInfo
 
-	if !append_fasm_header(&str_b) do return ""
+	append_fasm_header(&str_b)
 	if !generate_for_ast_node(&str_b, ast, &file_info) do return ""
 
 	return strings.clone(strings.to_string(str_b))
@@ -611,9 +596,9 @@ generate_asm :: proc(ast: ^AstNode) -> string {
 @(private="package")
 compile_asm :: proc(asm_str: string, src_name: string, bin_name: string) -> bool {
 	process_state, stdout, stderr, err := os2.process_exec(
-		os2.Process_Desc { 
+		os2.Process_Desc {
 			command = {"fasm", src_name, bin_name},
-		}, 
+		},
 		context.temp_allocator
 	)
 
