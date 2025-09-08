@@ -5,24 +5,27 @@ import "core:fmt"
 import "core:os/os2"
 import "core:sys/linux/"
 
+@(private="file")
 INT_BYTE_SIZE :: 8
 
+@(private="file")
 FunctionInfo :: struct {
-	identifier: string,
+	identifier:  string,
 	return_type: AstDataType,
-	params: [dynamic]AstDataType,
+	params:      [dynamic]AstDataType,
 }
 
+@(private="file")
 FileInfo :: struct {
 	callables: map[string]FunctionInfo
 }
 
 @(private="file")
 FunctionScope :: struct {
-	variables: map[string]string,
-	label: string,
+	variables:   map[string]string,
+	label:       string,
 	label_count: ^int,
-	rbp_offset: ^int,
+	rbp_offset:  ^int,
 	break_label: string,
 }
 
@@ -385,6 +388,7 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 	return false
 }
 
+@(private="package")
 generate_asm_for_var_declare :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
 									 func_scope: ^FunctionScope, file_info: ^FileInfo) -> bool {
 
@@ -548,6 +552,7 @@ generate_asm_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNo
 	return true
 }
 
+@(private="package")
 collect_metadata_function :: proc(file_info: ^FileInfo, node: ^AstNode) -> bool {
 
 	function_info: FunctionInfo

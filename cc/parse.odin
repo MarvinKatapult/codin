@@ -61,8 +61,8 @@ AstStatement :: struct {
 
 @(private="package")
 AstExpression :: struct {
-	value: string,
-	operator: Operator,
+	value:     string,
+	operator:  Operator,
 }
 
 @(private="package")
@@ -106,6 +106,7 @@ Operator :: enum {
 	OP_LOGICAL_AND,
 }
 
+@(private="package")
 ParseInfo :: struct {
 	functions: [dynamic]AstFunction,
 	break_possible: bool,
