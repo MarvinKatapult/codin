@@ -26,7 +26,7 @@ int main(void)
 
 ## AST for example
 ```text
-[AST_PROGRAM][0m
+[AST_PROGRAM]
     [AST_FUNCTION] Int fib 
         [AST_VAR_DECLARE] n  
         [AST_SCOPE] Parent: AST_FUNCTION 
