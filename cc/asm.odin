@@ -599,7 +599,7 @@ generate_asm :: proc(ast: ^AstNode) -> string {
 }
 
 @(private="package")
-compile_asm :: proc(asm_str: string, src_name: string, bin_name: string) -> bool {
+compile_asm :: proc(src_name: string, bin_name: string) -> bool {
 	process_state, stdout, stderr, err := os2.process_exec(
 		os2.Process_Desc {
 			command = {"fasm", src_name, bin_name},

@@ -42,13 +42,22 @@ compile_file :: proc(filepath: string) -> bool {
 		return false
 	}
 
-	src_file := "main.fasm"
-	log(.Proto, "Writing Assembly to ", src_file, "!")
-	os.write_entire_file(src_file, transmute([]u8)assembler)
+	output_dir :: "./output"
+	if !os.is_dir(output_dir) {
+		if os.make_directory(output_dir, 0o775) != nil {
+			log(.Error, "Unable to create Output directory!")
+			return false
+		}
+	}
+
+	asm_file :: "./debug/main.fasm"
+	log(.Proto, "Writing Assembly to ", asm_file, "!")
+	os.write_entire_file(asm_file, transmute([]u8)assembler)
 
 	log(.Proto, assembler, cc_prefix = false)
 
-	if !compile_asm(assembler, "main.fasm", "main") do return false
+	bin_name :: "./debug/main"
+	if !compile_asm(asm_file, bin_name) do return false
 
 	return true
 }
