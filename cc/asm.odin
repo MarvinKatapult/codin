@@ -613,8 +613,8 @@ compile_asm :: proc(src_name: string, bin_name: string) -> bool {
 		log(.Proto, yellow_stdout, cc_prefix = false)
 	}
 	if len(stderr) > 0 {
-		stderr_fmt := fmt.tprintf("FASM-%s", transmute(string)stderr)
-		log(.Error, stderr_fmt, cc_prefix = false)
+		stderr_fmt := fmt.tprintf("%s%s%s", RED, transmute(string)stderr, RESET)
+		fmt.println(stderr_fmt)
 		return false
 	}
 
