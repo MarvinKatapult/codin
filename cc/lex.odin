@@ -14,7 +14,6 @@ TokenType :: enum {
 	T_CLOSE_PARANTHESIS,
 	T_SEMICOLON,
 	T_RETURN_KEYWORD,
-	T_INT_KEYWORD,
 	T_VOID_KEYWORD,
 	T_IF,
 	T_ELSE,
@@ -45,6 +44,8 @@ TokenType :: enum {
 	T_SHIFT_RIGHT,
 	T_BREAK,
 	T_COMMA,
+	T_UNSIGNED,
+	T_SIGNED,
 }
 
 @(private="package")
@@ -109,8 +110,6 @@ is_keyword :: proc(s: string) -> (bool, TokenType) {
 	switch (s) {
 		case "return":
 			return true, TokenType.T_RETURN_KEYWORD
-		case "int":
-			return true, TokenType.T_INT_KEYWORD
 		case "void":
 			return true, TokenType.T_VOID_KEYWORD
 		case "if":
@@ -123,6 +122,10 @@ is_keyword :: proc(s: string) -> (bool, TokenType) {
 			return true, TokenType.T_FOR
 		case "break":
 			return true, TokenType.T_BREAK
+		case "unsigned":
+			return true, TokenType.T_UNSIGNED
+		case "signed":
+			return true, TokenType.T_SIGNED
 	}
 	return false, TokenType.T_IDENTIFIER
 }

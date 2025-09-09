@@ -83,7 +83,7 @@ log_ast :: proc(root: ^AstNode, x_offset: int = 0) {
     }
     switch v in root.value {
         case AstFunction:
-            fmt.printfln("%s[%s] %s %s %s", YELLOW, root.type, v.ret_type, v.identifier, RESET)
+            fmt.printfln("%s[%s] %s %s %s", YELLOW, root.type, fmt.tprint(v.ret_type), v.identifier, RESET)
         case AstStatement:
             fmt.printfln("%s[%s] %s %s %s", YELLOW, root.type, v.identifier, v.value, RESET)
         case AstExpression:

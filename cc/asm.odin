@@ -10,9 +10,9 @@ INT_BYTE_SIZE :: 8
 
 @(private="file")
 FunctionInfo :: struct {
+	params:      [dynamic]DataType,
 	identifier:  string,
-	return_type: AstDataType,
-	params:      [dynamic]AstDataType,
+	return_type: DataType,
 }
 
 @(private="file")
@@ -22,11 +22,16 @@ FileInfo :: struct {
 
 @(private="file")
 FunctionScope :: struct {
-	variables:   map[string]string,
+	variables:   map[string]Variable,
 	label:       string,
 	label_count: ^int,
 	rbp_offset:  ^int,
 	break_label: string,
+}
+
+Variable :: struct {
+	type: DataType,
+	rbp_offset: string,
 }
 
 @(private="file")
@@ -180,7 +185,8 @@ generate_asm_for_for :: proc(str_b: ^strings.Builder, statement_node: ^AstNode,
 }
 
 @(private="file")
-generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^AstNode, func_scope: ^FunctionScope) -> bool {
+generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^AstNode, 
+								  func_scope: ^FunctionScope) -> bool {
 
 	expression_t := expression_node.value.(AstExpression)
 
@@ -294,13 +300,17 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 				log(.Error, "Constant Expression Type cannot have childs")
 				return false
 			}
-			strings.write_string(str_b, "\tmov qword rax, ")
 			if expression_t.value not_in func_scope.variables {
 				log(.Error, "Variable ", expression_t.value, " not declared!")
 				return false
 			}
-			strings.write_string(str_b, func_scope.variables[expression_t.value])
-			strings.write_string(str_b, " ; moving value of variable directly into rax\n\n")
+			var := func_scope.variables[expression_t.value]
+			log(.Debug, fmt.tprint(var))
+			write_str := fmt.tprintf(
+				"\tmov %s %s, %s ; moving value of variable %s directly into rax\n\n",
+				size_keyword_for_type(var.type), register_for_type(var.type), var.rbp_offset, expression_t.value
+			)
+			strings.write_string(str_b, write_str)
 			return true
 		case .AST_EXPR_CONSTANT:
 			if len(expression_node.childs) != 0 {
@@ -357,13 +367,15 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 
 			// Put parameters for call on stack
 			original_rbp_offset := func_scope.rbp_offset^
-			for child in expression_node.childs {
+			for child, i in expression_node.childs {
 				generate_asm_for_expr(str_b, child, func_scope, file_info) or_return
 
-				strings.write_string(str_b, "\tpush rax\t; Allocate memory on the stack for parameter\n")
+				strings.write_string(str_b, 
+					fmt.tprintf("\tpush rax\t; Allocate memory on the stack for parameter\n")
+				)
 
 				rbp_offset := func_scope.rbp_offset
-				rbp_offset^ = rbp_offset^ - INT_BYTE_SIZE
+				rbp_offset^ = rbp_offset^ - 8
 			}
 			
 			strings.write_string(str_b, "\tcall ")
@@ -403,14 +415,43 @@ generate_asm_for_var_declare :: proc(str_b: ^strings.Builder, statement_node: ^A
 	}
 
 	rbp_offset := func_scope.rbp_offset
-	rbp_offset^ = rbp_offset^ - INT_BYTE_SIZE
-	func_scope.variables[statement_t.identifier] = strings.clone(fmt.tprintf("[rbp%d]", rbp_offset^))
+	rbp_offset^ = rbp_offset^ - statement_t.type.size
+
+	variable := Variable{type = statement_t.type, rbp_offset = strings.clone(fmt.tprintf("[rbp%d]", rbp_offset^))}
+	func_scope.variables[statement_t.identifier] = variable
+
 	if len(statement_node.childs) > 0 {
 		if !generate_asm_for_statement(str_b, statement_node.childs[0], func_scope, file_info) {
 			return false
 		}
 	}
 	return true
+}
+
+@(private="file")
+register_for_type :: proc(type: DataType) -> string {
+	switch type.size {
+		case 1: return "al"
+		case 2: return "ax"
+		case 4: return "eax"
+		case 8: return "rax"
+	}
+
+	assert(false)
+	return "";
+}
+
+@(private="file")
+size_keyword_for_type :: proc(type: DataType) -> string {
+	switch type.size {
+		case 1: return "byte"
+		case 2: return "word"
+		case 4: return "dword"
+		case 8: return "qword"
+	}
+
+	assert(false)
+	return "";
 }
 
 @(private="file")
@@ -443,16 +484,17 @@ generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^Ast
 			if !ok do return false
 
 			statement_t := statement_node.value.(AstStatement)
-			strings.write_string(str_b, "\tmov qword ")
+			
 			if statement_t.identifier not_in func_scope.variables {
 				log(.Error, "Variable ", statement_t.identifier, " not declared!")
 				return false
 			}
-			strings.write_string(str_b, func_scope.variables[statement_t.identifier])
-			strings.write_string(str_b, ", ") 
-			strings.write_string(str_b, "rax ; mov calculated value into variable: ")
-			strings.write_string(str_b, statement_t.identifier)
-			strings.write_string(str_b, "\n\n")
+			var: Variable = func_scope.variables[statement_t.identifier]
+			mov_string := fmt.tprintf(
+				"\tmov %s %s, %s \t; mov calculated value into variable: %s\n\n",
+				size_keyword_for_type(var.type), var.rbp_offset, register_for_type(var.type), statement_t.identifier
+			)
+			strings.write_string(str_b, mov_string)
 		case .AST_IF:
 			generate_asm_for_if(str_b, statement_node, func_scope, file_info) or_return
 		case .AST_WHILE:
@@ -469,8 +511,8 @@ generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^Ast
 }
 
 @(private="file")
-clone_variables :: proc(p_scope: map[string]string) -> ^map[string]string {
-	scope := new(map[string]string)
+clone_variables :: proc(p_scope: map[string]Variable) -> ^map[string]Variable {
+	scope := new(map[string]Variable)
 
 	for binding in p_scope {
 		scope[binding] = p_scope[binding]
@@ -526,7 +568,7 @@ generate_asm_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNo
 	strings.write_string(str_b, "\tmov rbp, rsp\t; Set new Base pointer\n\n")
 
 	func_scope := FunctionScope {
-		variables = make(map[string]string),
+		variables = make(map[string]Variable),
 		label_count = new(int),
 		rbp_offset = new(int),
 		label = strings.clone(function_label)
@@ -540,7 +582,8 @@ generate_asm_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNo
 
 		statement_t := child.value.(AstStatement)
 		parameter_rbp_offset += 8
-		func_scope.variables[statement_t.identifier] = strings.clone(fmt.tprintf("[rbp+%d]", parameter_rbp_offset))
+		variable := Variable{type = statement_t.type, rbp_offset = strings.clone(fmt.tprintf("[rbp+%d]", parameter_rbp_offset))}
+		func_scope.variables[statement_t.identifier] = variable
 	}
 
 	for child in function_node.childs {

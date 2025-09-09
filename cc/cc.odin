@@ -5,11 +5,13 @@ import "core:os"
 
 start_compiling :: proc() {
 	if len(os.args) < 2 {
-		fmt.printfln("My C Compiler\nUsage:%s [*.c]", os.args[0])
+		fmt.printfln("Codin C-Compiler (WIP)\nUsage:%s [*.c]", os.args[0])
 		return
 	}
 
-	compile_file(os.args[1])
+	if !compile_file(os.args[1]) {
+		os.exit(1)
+	}
 }
 
 compile_file :: proc(filepath: string) -> bool {
@@ -50,13 +52,13 @@ compile_file :: proc(filepath: string) -> bool {
 		}
 	}
 
-	asm_file :: "./debug/main.fasm"
+	asm_file :: "./output/main.fasm"
 	log(.Proto, "Writing Assembly to ", asm_file, "!")
-	os.write_entire_file(asm_file, transmute([]u8)assembler)
+	if !os.write_entire_file(asm_file, transmute([]u8)assembler) do return false
 
 	log(.Proto, assembler, cc_prefix = false)
 
-	bin_name :: "./debug/main"
+	bin_name :: "./output/main"
 	if !compile_asm(asm_file, bin_name) do return false
 
 	return true

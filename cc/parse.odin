@@ -48,7 +48,7 @@ AstValue :: union {
 
 @(private="package")
 AstFunction :: struct {
-	ret_type:   AstDataType,
+	ret_type:   DataType,
 	identifier: string,
 }
 
@@ -56,23 +56,18 @@ AstFunction :: struct {
 AstStatement :: struct {
 	identifier: string,
 	value:      string,
-	type:		AstDataType,
+	type:		DataType,
 }
 
 @(private="package")
 AstExpression :: struct {
-	value:     string,
-	operator:  Operator,
+	value:    string,
+	type:     DataType,
+	operator: Operator,
 }
 
 @(private="package")
 AstScope :: struct { }
-
-@(private="package")
-AstDataType :: enum {
-	Void,
-	Int,
-}
 
 @(private="file")
 TokenIter :: struct {
@@ -107,10 +102,20 @@ Operator :: enum {
 }
 
 @(private="package")
+DataType :: struct {
+	name:      string,
+	size:      int,
+	is_float:  bool,
+	unsigned:  bool,
+	is_struct: bool,
+}
+
+@(private="package")
 ParseInfo :: struct {
-	functions: [dynamic]AstFunction,
-	break_possible: bool,
-	no_semicolon: bool,
+	functions:             [dynamic]AstFunction,
+	types:                 [dynamic]DataType,
+	break_possible:        bool,
+	no_semicolon:          bool,
 	no_declare_and_assign: bool,
 }
 
@@ -652,19 +657,48 @@ resolving_assignment :: proc(root: ^AstNode, iter: ^TokenIter) -> bool {
 }
 
 @(private="file")
-resolve_integer_declaration :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^AstNode, ok: bool) {
+get_token_type_info :: proc(iter: ^TokenIter, parse_info: ^ParseInfo, type_info: ^DataType) -> bool {
+	unsigned := false
+
+	if current_token(iter).type == .T_UNSIGNED {
+		unsigned = true
+		next_token(iter)
+	} else if current_token(iter).type == .T_SIGNED {
+		next_token(iter)
+	}
+
+	if current_token(iter).type != .T_IDENTIFIER {
+		log_error_with_token(current_token(iter)^, "Token not valid Datatype")
+		return false
+	}
+
+	identifier := current_token(iter).value
+	for type in parse_info.types {
+		if identifier == type.name {
+			type_info^ = type
+			type_info.unsigned = unsigned
+			return true
+		}
+	}
+	return false
+}
+
+@(private="file")
+resolve_variable_declaration :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^AstNode, ok: bool) {
 	// Integer Declaration
 	node = new(AstNode)
 	node.type = .AST_VAR_DECLARE
 	statement_t: AstStatement
 	node.value = statement_t
-	if current_token(iter).type == .T_INT_KEYWORD {
-		statement_t.type = .Int
+	ok = false
+
+	if get_token_type_info(iter, parse_info, &statement_t.type) {
 		node.value = statement_t
 		next_token(iter)
+		log(.Debug, fmt.tprint(statement_t.type))
 
 		if current_token(iter).type != .T_IDENTIFIER {
-			log_error_with_token(current_token(iter)^, "Expected identifier after int keyword")
+			log_error_with_token(current_token(iter)^, "Expected identifier after Datatype keyword")
 			return node, false
 		}
 
@@ -686,7 +720,7 @@ resolve_integer_declaration :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) ->
 		ok = true
 	}
 
-	return
+	return node, ok
 }
 
 @(private="package")
@@ -734,8 +768,8 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 		parsed_stmt = true
 	}
 
-	if !parsed_stmt && current_token(iter).type == .T_INT_KEYWORD {
-		node, parsed_stmt = resolve_integer_declaration(iter, parse_info)
+	if !parsed_stmt {
+		node, parsed_stmt = resolve_variable_declaration(iter, parse_info)
 	}
 
 	// if-statement
@@ -872,7 +906,6 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 
 	// Variable Assignment
 	if !parsed_stmt && current_token(iter).type == .T_IDENTIFIER {
-		parsed_stmt = true
 		node.type = .AST_VAR_ASSIGNMENT
 
 		if look_ahead_token(iter).type == .T_ASSIGNMENT {
@@ -880,6 +913,7 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 			if !resolving_assignment(node, iter) {
 				return node, false
 			}
+			parsed_stmt = true
 		} else {
 			// TODO: Duplicate code with Standalone expression - see:bottom
 			expr_node, ok := resolve_expr(node, iter)
@@ -910,6 +944,11 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 		}
 	}
 
+	if !parsed_stmt {
+		log_error_with_token(current_token(iter)^, "Could not resolve statement")
+		return node, false
+	}
+
 	// Statement ends with semicolon
 	if current_token(iter).type != .T_SEMICOLON && !parse_info.no_semicolon {
 		log_error_with_token(current_token(iter)^, "Statement has to end with ;")
@@ -926,17 +965,15 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter, parse_info: ^ParseInf
 	node.type = .AST_FUNCTION
 	node.value = function_t
 
-
-	// int
-	if current_token(iter).type != .T_INT_KEYWORD {
+	// [TYPE]
+	if !get_token_type_info(iter, parse_info, &function_t.ret_type) {
 		log_error_with_token(current_token(iter)^, "Token is not a valid return type")
 		return node, false
 	}
-	function_t.ret_type = .Int
 
 	next_token(iter)
 	
-	// int foo
+	// [TYPE] foo
 	if current_token(iter).type != .T_IDENTIFIER {
 		log_error_with_token(current_token(iter)^, "Token is not a valid identifier")
 		return node, false
@@ -945,7 +982,7 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter, parse_info: ^ParseInf
 
 	next_token(iter)
 
-	// int foo(
+	// [TYPE] foo(
 	if current_token(iter).type != .T_OPEN_PARANTHESIS {
 		log_error_with_token(current_token(iter)^, "Expected \'(\' after function identifier")
 		return node, false
@@ -972,10 +1009,10 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter, parse_info: ^ParseInf
 		first_parameter = false
 
 		parse_info.no_declare_and_assign = true
-		declaration, ok := resolve_integer_declaration(iter, parse_info)
+		declaration, ok := resolve_variable_declaration(iter, parse_info)
 		parse_info.no_declare_and_assign = false
 		if !ok {
-			log_error_with_token(current_token(iter)^, "Failed to parse integer declaration as parameter")
+			log_error_with_token(current_token(iter)^, "Failed to parse type declaration as parameter")
 			return node, false
 		}
 		append_ast_node(node, declaration)
@@ -988,7 +1025,7 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter, parse_info: ^ParseInf
 
 	next_token(iter)
 
-	// int foo(void) {
+	// [TYPE] foo(void) {
 	if current_token(iter).type != .T_OPEN_BRACE {
 		log_error_with_token(current_token(iter)^, "Expected \'{\' after function parameters")
 		return node, false
@@ -1029,6 +1066,13 @@ resolve_scope :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (scope_node: 
 	return scope_node, true
 }
 
+set_default_parse_info :: proc(parse_info: ^ParseInfo) {
+	append(&parse_info.types, DataType{size = 1, name = "char"})
+	append(&parse_info.types, DataType{size = 2, name = "short"})
+	append(&parse_info.types, DataType{size = 4, name = "int"})
+	append(&parse_info.types, DataType{size = 8, name = "long"})
+}
+
 @(private="package")
 build_ast :: proc(tokens: []Token) -> (bool, ^AstNode) {
 	root := new(AstNode)
@@ -1039,6 +1083,7 @@ build_ast :: proc(tokens: []Token) -> (bool, ^AstNode) {
 	}
 
 	parse_info: ParseInfo
+	set_default_parse_info(&parse_info)
 	// Later this struct will be filled by preprocessor, etc...
 
 	for iter.i < len(iter.tokens) {
