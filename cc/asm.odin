@@ -13,6 +13,7 @@ FunctionInfo :: struct {
 	params:      [dynamic]DataType,
 	identifier:  string,
 	return_type: DataType,
+	implemented: bool,
 }
 
 @(private="file")
@@ -361,6 +362,11 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 
 			func_data := file_info.callables[func_identifier]
 
+			if !func_data.implemented {
+				log(.Error, fmt.tprintf("Function %s is not implemented", func_identifier))
+				return false
+			}
+
 			if len(func_data.params) != len(expression_node.childs) {
 				log(.Error, fmt.tprintf("Call to function %s mismatching parameter count", func_identifier))
 				return false
@@ -572,7 +578,7 @@ generate_asm_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNo
 		variables = make(map[string]Variable),
 		label_count = new(int),
 		rbp_offset = new(int),
-		label = strings.clone(function_label)
+		label = function_label
 	}
 
 	rbp_offset: int = 0
@@ -597,9 +603,10 @@ generate_asm_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNo
 }
 
 @(private="package")
-collect_metadata_function :: proc(file_info: ^FileInfo, node: ^AstNode) -> bool {
+collect_metadata_function :: proc(file_info: ^FileInfo, node: ^AstNode, implementation := false) -> bool {
 
 	function_info: FunctionInfo
+	function_info.implemented = implementation
 	function_t: AstFunction = node.value.(AstFunction)
 
 	function_info.identifier = function_t.identifier
@@ -628,8 +635,11 @@ generate_for_ast_node :: proc(str_b: ^strings.Builder, node: ^AstNode, file_info
 				if !generate_for_ast_node(str_b, child, file_info) do return false
 			}
 		case .AST_FUNCTION:
-			if !collect_metadata_function(file_info, node) do return false
+			if !collect_metadata_function(file_info, node, implementation = true) do return false
 			if !generate_asm_for_function(str_b, node, file_info) do return false
+		case .AST_FUNCTION_DECLARE: 
+			if !collect_metadata_function(file_info, node) do return false
+			strings.write_string(str_b, fmt.tprintf("; Extern Reference %s\n\n", node.value.(AstFunction).identifier))
 	}
 	return true
 }

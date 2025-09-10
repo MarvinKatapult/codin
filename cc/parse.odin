@@ -11,6 +11,7 @@ NodeType :: enum {
 	AST_PROGRAM,
 	AST_SCOPE,
 	AST_FUNCTION,
+	AST_FUNCTION_DECLARE,
 	AST_RETURN,
 	AST_CONSTANT,
 	AST_RETURN_STATEMENT,
@@ -1021,7 +1022,13 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter, parse_info: ^ParseInf
 		}
 	}
 
+	node.value = function_t
 	next_token(iter)
+
+	if current_token(iter).type == .T_SEMICOLON {
+		node.type = .AST_FUNCTION_DECLARE
+		return node, true
+	}
 
 	// [TYPE] foo(void) {
 	if current_token(iter).type != .T_OPEN_BRACE {
@@ -1029,7 +1036,6 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter, parse_info: ^ParseInf
 		return node, false
 	}
 
-	node.value = function_t
 	scope: ^AstNode
 	scope, ok = resolve_scope(iter, parse_info)
 	append_ast_node(node, scope)
