@@ -37,8 +37,9 @@ log :: proc(type: LogType, msg: ..string, cc_prefix: bool = true, place := #call
 	prefix_str := cc_prefix ? "[cc]" : ""
     switch type {
         case .Error:
-            fmt.eprintf("%s%s%s%s (%s)", RED, UNDERLINE, prefix_str, cc_prefix ? "[E] " : "", place)
+            fmt.eprintf("%s%s%s%s (%s)", RED, UNDERLINE, prefix_str, cc_prefix ? "[E]" : "", place)
 			fmt.print(RESET)
+			fmt.print(" ")
         case .Debug:
             fmt.printf("%s%s%s", BLUE, prefix_str, cc_prefix ? "[D] " : "")
 			fmt.print(RESET)

@@ -240,7 +240,7 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 		case .OP_BINARY_NOT_EQUAL:
 			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax != rdi\n")
 			strings.write_string(str_b, "\tsetne al\t; Set al to 1 if true\n")
-				strings.write_string(str_b, "\tmovsx rax, al\t; Extend al to rax\n")
+			strings.write_string(str_b, "\tmovsx rax, al\t; Extend al to rax\n")
 		case .OP_LOGICAL_OR:
 			strings.write_string(str_b, "\ttest rdi, rdi\t; Check if rdi != 0\n")
 			strings.write_string(str_b, "\tsetnz dl\t; dl = (rdi != 0) ? 1 : 0\n")
@@ -279,7 +279,6 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 			strings.write_string(str_b, "\tmov rcx, rax\t; Only cl can be used for shift operations\n")
 			strings.write_string(str_b, "\tsar rdi, cl\t; rax >> rdi\n")
 			strings.write_string(str_b, "\tmov rax, rdi\t\n")
-			
 		case .OP:
 			log(.Error, "Not a valid Operator:", fmt.tprintf("%s", expression_node^))
 			return false
@@ -300,16 +299,18 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 				log(.Error, "Constant Expression Type cannot have childs")
 				return false
 			}
+
 			if expression_t.value not_in func_scope.variables {
 				log(.Error, "Variable ", expression_t.value, " not declared!")
 				return false
 			}
+
 			var := func_scope.variables[expression_t.value]
-			log(.Debug, fmt.tprint(var))
 			write_str := fmt.tprintf(
 				"\tmov %s %s, %s ; moving value of variable %s directly into rax\n\n",
 				size_keyword_for_type(var.type), register_for_type(var.type), var.rbp_offset, expression_t.value
 			)
+
 			strings.write_string(str_b, write_str)
 			return true
 		case .AST_EXPR_CONSTANT:
@@ -608,6 +609,11 @@ collect_metadata_function :: proc(file_info: ^FileInfo, node: ^AstNode) -> bool 
 
 		statement_t := parameter.value.(AstStatement)
 		append(&function_info.params, statement_t.type)
+	}
+
+	if function_t.identifier in file_info.callables {
+		log(.Error, fmt.tprintf("Function %s is duplicate", function_t.identifier))
+		return false
 	}
 
 	file_info.callables[function_t.identifier] = function_info

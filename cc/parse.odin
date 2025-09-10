@@ -668,7 +668,6 @@ get_token_type_info :: proc(iter: ^TokenIter, parse_info: ^ParseInfo, type_info:
 	}
 
 	if current_token(iter).type != .T_IDENTIFIER {
-		log_error_with_token(current_token(iter)^, "Token not valid Datatype")
 		return false
 	}
 
@@ -695,7 +694,6 @@ resolve_variable_declaration :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -
 	if get_token_type_info(iter, parse_info, &statement_t.type) {
 		node.value = statement_t
 		next_token(iter)
-		log(.Debug, fmt.tprint(statement_t.type))
 
 		if current_token(iter).type != .T_IDENTIFIER {
 			log_error_with_token(current_token(iter)^, "Expected identifier after Datatype keyword")
@@ -1049,7 +1047,7 @@ resolve_scope :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (scope_node: 
 	scope_node.type = .AST_SCOPE
 	scope_node.value = scope_t
 
-	// Skip {
+	// Skip \{
 	next_token(iter)
 
 	// int foo(void) {...}
@@ -1067,10 +1065,10 @@ resolve_scope :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (scope_node: 
 }
 
 set_default_parse_info :: proc(parse_info: ^ParseInfo) {
-	append(&parse_info.types, DataType{size = 1, name = "char"})
-	append(&parse_info.types, DataType{size = 2, name = "short"})
-	append(&parse_info.types, DataType{size = 4, name = "int"})
-	append(&parse_info.types, DataType{size = 8, name = "long"})
+	append(&parse_info.types, DataType{size = 1, name = "char",  is_struct = false, is_float = false})
+	append(&parse_info.types, DataType{size = 2, name = "short", is_struct = false, is_float = false})
+	append(&parse_info.types, DataType{size = 4, name = "int",   is_struct = false, is_float = false})
+	append(&parse_info.types, DataType{size = 8, name = "long",  is_struct = false, is_float = false})
 }
 
 @(private="package")
