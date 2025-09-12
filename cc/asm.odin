@@ -31,7 +31,7 @@ FunctionScope :: struct {
 }
 
 Variable :: struct {
-	type: DataType,
+	type:       DataType,
 	rbp_offset: string,
 }
 
@@ -374,11 +374,11 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 
 			// Put parameters for call on stack
 			original_rbp_offset := func_scope.rbp_offset^
-			for child, i in expression_node.childs {
+			#reverse for child, i in expression_node.childs {
 				generate_asm_for_expr(str_b, child, func_scope, file_info) or_return
 
 				strings.write_string(str_b, 
-					fmt.tprintf("\tpush rax\t; Allocate memory on the stack for parameter\n")
+					fmt.tprintf("\tpush rax\t; Allocate memory on the stack for parameter\n\n")
 				)
 
 				rbp_offset := func_scope.rbp_offset
@@ -584,7 +584,7 @@ generate_asm_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNo
 	rbp_offset: int = 0
 
 	parameter_rbp_offset: int = 8
-	#reverse for child in function_node.childs {
+	for child in function_node.childs {
 		if child.type != .AST_VAR_DECLARE do continue
 
 		statement_t := child.value.(AstStatement)
