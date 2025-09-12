@@ -362,7 +362,7 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 
 			func_data := file_info.callables[func_identifier]
 
-			if !func_data.implemented {
+			if !func_data.implemented && false {
 				log(.Error, fmt.tprintf("Function %s is not implemented", func_identifier))
 				return false
 			}
@@ -658,10 +658,10 @@ generate_asm :: proc(ast: ^AstNode) -> string {
 }
 
 @(private="package")
-compile_asm :: proc(src_name: string, bin_name: string) -> bool {
+compile_asm :: proc(src_name: string) -> bool {
 	process_state, stdout, stderr, err := os2.process_exec(
 		os2.Process_Desc {
-			command = {"fasm", src_name, bin_name},
+			command = {"fasm", src_name, compile_flags.output_file},
 		},
 		context.temp_allocator
 	)
@@ -682,11 +682,11 @@ compile_asm :: proc(src_name: string, bin_name: string) -> bool {
 		return false
 	}
 
-	log(.Proto, "Compiling of file ", bin_name, " was successful!")
+	log(.Proto, "Compiling of file ", compile_flags.output_file, " was successful!")
 
 	// r-xr-xr-x
-	if os2.chmod(bin_name, 0o755) != nil {
-		log(.Error, "File rights of ", bin_name, " could not be set properly!")
+	if !compile_flags.is_object && os2.chmod(compile_flags.output_file, 0o755) != nil {
+		log(.Error, "File rights of ", compile_flags.output_file, " could not be set properly!")
 		return false
 	}
 
