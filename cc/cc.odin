@@ -19,8 +19,8 @@ start_compiling :: proc() {
 		fmt.printfln("Codin C-Compiler (WIP)")
 		fmt.printfln("USAGE:  codin (OPTIONS) [*.c]")
 		fmt.printfln("OPTIONS:")
-		fmt.printfln("        -c          Compile file to .o (Object file)")
-		fmt.printfln("        -o [OUTPUT] Overwrite output file")
+		fmt.printfln("        -c          Compile file to .o (Object file) (DEF=FALSE)")
+		fmt.printfln("        -o [OUTPUT] Overwrite output file            (DEF=a.out)")
 		return
 	}
 
