@@ -32,6 +32,16 @@ TokenType :: enum {
 	T_LESS_EQUAL,
 	T_GREATER_EQUAL,
 	T_ASSIGNMENT,
+	T_ASSIGN_PLUS,
+	T_ASSIGN_MINUS,
+	T_ASSIGN_MULT,
+	T_ASSIGN_DIV,
+	T_ASSIGN_PERCENT,
+	T_ASSIGN_SHIFTL,
+	T_ASSIGN_SHIFTR,
+	T_ASSIGN_AND,
+	T_ASSIGN_XOR,
+	T_ASSIGN_OR,
 	T_EQUAL_EQUAL,
 	T_NOT_EQUAL,
 	T_BIT_AND,
@@ -250,6 +260,56 @@ lex :: proc(filename: string) -> [dynamic]Token {
 					last_token.type = .T_NOT_EQUAL
 					delete(last_token.value)
 					last_token.value = "!="
+					continue;
+				case .T_PLUS:
+					last_token.type = .T_ASSIGN_PLUS
+					delete(last_token.value)
+					last_token.value = "+="
+					continue;
+				case .T_MINUS:
+					last_token.type = .T_ASSIGN_MINUS
+					delete(last_token.value)
+					last_token.value = "-="
+					continue;
+				case .T_STAR:
+					last_token.type = .T_ASSIGN_MULT
+					delete(last_token.value)
+					last_token.value = "*="
+					continue;
+				case .T_FSLASH:
+					last_token.type = .T_ASSIGN_DIV
+					delete(last_token.value)
+					last_token.value = "/="
+					continue;
+				case .T_PERCENT:
+					last_token.type = .T_ASSIGN_PERCENT
+					delete(last_token.value)
+					last_token.value = "%="
+					continue;
+				case .T_SHIFT_LEFT:
+					last_token.type = .T_ASSIGN_SHIFTL
+					delete(last_token.value)
+					last_token.value = "<<="
+					continue;
+				case .T_SHIFT_RIGHT:
+					last_token.type = .T_ASSIGN_SHIFTR
+					delete(last_token.value)
+					last_token.value = ">>="
+					continue;
+				case .T_BIT_AND:
+					last_token.type = .T_ASSIGN_AND
+					delete(last_token.value)
+					last_token.value = "&="
+					continue;
+				case .T_BIT_XOR:
+					last_token.type = .T_ASSIGN_XOR
+					delete(last_token.value)
+					last_token.value = "^="
+					continue;
+				case .T_BIT_OR:
+					last_token.type = .T_ASSIGN_OR
+					delete(last_token.value)
+					last_token.value = "|="
 					continue;
 			}
 		}

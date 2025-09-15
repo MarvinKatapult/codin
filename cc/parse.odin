@@ -634,24 +634,86 @@ resolve_expr :: proc(root: ^AstNode, iter: ^TokenIter, no_expr_possible := true)
 }
 
 @(private="package")
-resolving_assignment :: proc(root: ^AstNode, iter: ^TokenIter) -> bool {
+token_assignment_operator :: proc(token: Token, op: ^Operator, only_equal_assign: bool) -> bool {
+
+	if only_equal_assign {
+		if op != nil do op^ = .OP
+		return token.type == .T_ASSIGNMENT
+	}
+
+	#partial switch token.type {
+		case .T_ASSIGN_PLUS:
+			if op != nil do op^ = .OP_BINARY_PLUS
+		case .T_ASSIGN_MINUS:
+			if op != nil do op^ = .OP_BINARY_MINUS
+		case .T_ASSIGN_MULT:
+			if op != nil do op^ = .OP_BINARY_MULT
+		case .T_ASSIGN_DIV:
+			if op != nil do op^ = .OP_BINARY_DIV
+		case .T_ASSIGN_PERCENT:
+			if op != nil do op^ = .OP_BINARY_MOD
+		case .T_ASSIGN_SHIFTL:
+			if op != nil do op^ = .OP_BIT_SHL
+		case .T_ASSIGN_SHIFTR:
+			if op != nil do op^ = .OP_BIT_SHR
+		case .T_ASSIGN_AND:
+			if op != nil do op^ = .OP_BIT_AND
+		case .T_ASSIGN_XOR:
+			if op != nil do op^ = .OP_BIT_XOR
+		case .T_ASSIGN_OR:
+			if op != nil do op^ = .OP_BIT_OR
+		case .T_ASSIGNMENT:
+			if op != nil do op^ = .OP
+
+		case:
+			return false
+	}
+	return true
+}
+
+@(private="package")
+resolving_assignment :: proc(root: ^AstNode, iter: ^TokenIter, only_equal_assign := true) -> bool {
 	statement_t: AstStatement
 	statement_t.identifier = strings.clone(prev_token(iter).value)
 	root.value = statement_t
 	root.type = .AST_VAR_ASSIGNMENT
-
-	if current_token(iter).type != .T_ASSIGNMENT {
-		log_error_with_token(current_token(iter)^, "Expected =")
+	
+	op: Operator
+	if !token_assignment_operator(current_token(iter)^, &op, only_equal_assign) {
+		log_error_with_token(current_token(iter)^, "Expected assignment operator")
 		return false
 	}
 
 	next_token(iter)
+	expr_node, ok := resolve_expr(root, iter, no_expr_possible = false)
 
-	node, ok := resolve_expr(root, iter, no_expr_possible = false)
-	append_ast_node(root, node)
 	if !ok {
 		log(.Error, "Could not resolve expression")
 		return false
+	}
+
+	if op != .OP {
+		expression_t: AstExpression
+		expression_t.operator = op
+		
+		binary_node := new(AstNode)
+		binary_node.type = .AST_EXPR_BINARY
+		binary_node.value = expression_t
+		append_ast_node(root, binary_node)
+
+		expression_t.value = root.value.(AstStatement).identifier
+	
+		var_node := new(AstNode)
+		var_node.type = .AST_EXPR_VARIABLE
+		var_node.value = expression_t
+		log(.Debug, fmt.tprint(root.value))
+
+		append_ast_node(binary_node, var_node)
+		append_ast_node(binary_node, expr_node)
+
+	// Just an assignment
+	} else {
+		append_ast_node(root, expr_node)
 	}
 
 	return true
@@ -716,6 +778,7 @@ resolve_variable_declaration :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -
 			append_ast_node(node, assignment_node)
 
 			if parse_info.no_declare_and_assign || !resolving_assignment(assignment_node, iter) {
+				log(.Debug, "Blabla")
 				return node, false
 			}
 		}
@@ -911,9 +974,9 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 	if !parsed_stmt && current_token(iter).type == .T_IDENTIFIER {
 		node.type = .AST_VAR_ASSIGNMENT
 
-		if look_ahead_token(iter).type == .T_ASSIGNMENT {
+		if token_assignment_operator(look_ahead_token(iter)^, nil, only_equal_assign = false) {
 			next_token(iter)
-			if !resolving_assignment(node, iter) {
+			if !resolving_assignment(node, iter, only_equal_assign = false) {
 				return node, false
 			}
 			parsed_stmt = true
