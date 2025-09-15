@@ -695,6 +695,10 @@ resolve_variable_declaration :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -
 	if get_token_type_info(iter, parse_info, &statement_t.type) {
 		node.value = statement_t
 		next_token(iter)
+		if statement_t.type.size <= 0 {
+			log_error_with_token(current_token(iter)^, "type is not valid type for variable declaration")
+			return node, false
+		}
 
 		if current_token(iter).type != .T_IDENTIFIER {
 			log_error_with_token(current_token(iter)^, "Expected identifier after Datatype keyword")
@@ -992,11 +996,13 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter, parse_info: ^ParseInf
 	// Parameter
 	first_parameter := true
 	for current_token(iter).type != .T_CLOSE_PARANTHESIS {
-		if first_parameter && current_token(iter).type == .T_VOID_KEYWORD {
+		if first_parameter && current_token(iter).value == "void" {
 			if look_ahead_token(iter).type != .T_CLOSE_PARANTHESIS {
 				log_error_with_token(current_token(iter)^, "Expected end of parameters after 'void'")
 				return node, false
 			}
+
+			first_parameter = false
 			next_token(iter)
 			break;
 		}
@@ -1071,6 +1077,7 @@ resolve_scope :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (scope_node: 
 }
 
 set_default_parse_info :: proc(parse_info: ^ParseInfo) {
+	append(&parse_info.types, DataType{size = 0, name = "void",  is_struct = false, is_float = false})
 	append(&parse_info.types, DataType{size = 1, name = "char",  is_struct = false, is_float = false})
 	append(&parse_info.types, DataType{size = 2, name = "short", is_struct = false, is_float = false})
 	append(&parse_info.types, DataType{size = 4, name = "int",   is_struct = false, is_float = false})

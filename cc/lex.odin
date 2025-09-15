@@ -14,7 +14,6 @@ TokenType :: enum {
 	T_CLOSE_PARANTHESIS,
 	T_SEMICOLON,
 	T_RETURN_KEYWORD,
-	T_VOID_KEYWORD,
 	T_IF,
 	T_ELSE,
 	T_WHILE,
@@ -110,8 +109,6 @@ is_keyword :: proc(s: string) -> (bool, TokenType) {
 	switch (s) {
 		case "return":
 			return true, TokenType.T_RETURN_KEYWORD
-		case "void":
-			return true, TokenType.T_VOID_KEYWORD
 		case "if":
 			return true, TokenType.T_IF
 		case "else":
