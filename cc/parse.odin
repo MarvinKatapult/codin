@@ -706,7 +706,6 @@ resolving_assignment :: proc(root: ^AstNode, iter: ^TokenIter, only_equal_assign
 		var_node := new(AstNode)
 		var_node.type = .AST_EXPR_VARIABLE
 		var_node.value = expression_t
-		log(.Debug, fmt.tprint(root.value))
 
 		append_ast_node(binary_node, var_node)
 		append_ast_node(binary_node, expr_node)
@@ -778,7 +777,6 @@ resolve_variable_declaration :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -
 			append_ast_node(node, assignment_node)
 
 			if parse_info.no_declare_and_assign || !resolving_assignment(assignment_node, iter) {
-				log(.Debug, "Blabla")
 				return node, false
 			}
 		}
