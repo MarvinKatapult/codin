@@ -3,9 +3,6 @@
 
 # 1
 - Post and Prefix Operator
-- if without {}
-- for without {}
-- while without {}
 - do-while-loop
 
 # 2
