@@ -107,7 +107,7 @@ compile_file :: proc() -> bool {
 		}
 	}
 
-	asm_file :: "./output/main.fasm"
+	asm_file := fmt.tprintf("./output/out.s")
 	log(.Proto, "Writing Assembly to ", asm_file, "!")
 	if !os.write_entire_file(asm_file, transmute([]u8)assembler) do return false
 

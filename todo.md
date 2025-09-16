@@ -2,7 +2,6 @@
 - Function should have to have return statement
 
 # 1
-- Assigment Binary Operators (+=, ...)
 - Post and Prefix Operator
 - if without {}
 - for without {}

@@ -7,6 +7,7 @@ import "core:sys/linux/"
 
 @(private="file")
 INT_BYTE_SIZE :: 8
+ENTRY_LABEL :: "_start"
 
 @(private="file")
 FunctionInfo :: struct {
@@ -36,11 +37,9 @@ Variable :: struct {
 }
 
 @(private="file")
-append_fasm_header :: proc(str_b: ^strings.Builder) {
-	strings.write_string(str_b, "format ELF64 executable 3\n")
-	strings.write_string(str_b, "entry start\n")
-	strings.write_string(str_b, "\n")
-	strings.write_string(str_b, "segment readable executable\n")
+append_nasm_header :: proc(str_b: ^strings.Builder) {
+	strings.write_string(str_b, "section .text\n")
+	strings.write_string(str_b, fmt.tprint("\tglobal ", ENTRY_LABEL, "\n\n"))
 }
 
 @(private="file")
@@ -475,7 +474,7 @@ generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^Ast
 
 			if statement_node.type == .AST_RETURN_STATEMENT {
 				strings.write_string(str_b, "\tleave\t\t; Restore old BasePointer and Free Stack memory\n")
-				if func_scope.label != "start" {
+				if func_scope.label != ENTRY_LABEL {
 					strings.write_string(str_b, "\tret \t\t; Returning\n\n")
 				} else {
 					strings.write_string(str_b, "\tmov rdi, rax\t; move calculated return value in rdi\n")
@@ -566,7 +565,7 @@ generate_asm_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNo
 	function_t := function_node.value.(AstFunction)
 
 	function_label := function_t.identifier
-	if function_label == "main" do function_label = "start"
+	if function_label == "main" do function_label = ENTRY_LABEL
 
 	strings.write_string(str_b, function_label)
 	strings.write_string(str_b, ":\n")
@@ -651,7 +650,7 @@ generate_asm :: proc(ast: ^AstNode) -> string {
 
 	file_info: FileInfo
 
-	append_fasm_header(&str_b)
+	append_nasm_header(&str_b)
 	if !generate_for_ast_node(&str_b, ast, &file_info) do return ""
 
 	return strings.clone(strings.to_string(str_b))
@@ -659,14 +658,15 @@ generate_asm :: proc(ast: ^AstNode) -> string {
 
 @(private="package")
 compile_asm :: proc(src_name: string) -> bool {
+	obj_file_name := fmt.tprintf("%s.o", compile_flags.output_file)
 	process_state, stdout, stderr, err := os2.process_exec(
 		os2.Process_Desc {
-			command = {"fasm", src_name, compile_flags.output_file},
+			command = {"nasm", src_name, "-f ELF64", "-o", obj_file_name},
 		},
 		context.temp_allocator
 	)
 
-	log(.Proto, "FASM Output:")
+	log(.Proto, "Nasm Output:")
 	if len(stdout) > 0 {
 		yellow_stdout := fmt.tprintf("%s%s%s", YELLOW, transmute(string)stdout, RESET)
 		log(.Proto, yellow_stdout, cc_prefix = false)
@@ -678,7 +678,27 @@ compile_asm :: proc(src_name: string) -> bool {
 	}
 
 	if err != nil {
-		log(.Error, "FASM could not be started!\nFasm is a dependency of this C compiler:\nhttps://flatassembler.net/")
+		log(.Error, "NASM could not be started!\nNasm is a dependency of this C compiler:\nhttps://www.nasm.us")
+		return false
+	}
+
+	// Linking
+	log(.Proto, "Linking of executeable")
+	process_state, stdout, stderr, err = os2.process_exec(
+		os2.Process_Desc {
+			command = {"ld", "-melf_x86_64", obj_file_name, "-o", compile_flags.output_file},
+		},
+		context.temp_allocator
+	)
+
+	if len(stderr) > 0 {
+		stderr_fmt := fmt.tprintf("%s%s%s", RED, transmute(string)stderr, RESET)
+		fmt.println(stderr_fmt)
+		return false
+	}
+
+	if err != nil {
+		log(.Error, "ld could not be started!\n")
 		return false
 	}
 

@@ -4,7 +4,7 @@ Unfinished C-Compiler written in Odin
 
 ## Dependencies
 - Odin
-- Fasm
+- Nasm
 
 ## Highest level code supported by compiler
 ```c
