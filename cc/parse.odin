@@ -1151,7 +1151,7 @@ set_default_parse_info :: proc(parse_info: ^ParseInfo) {
 	append(&parse_info.types, DataType{size = 1, name = "char",  is_struct = false, is_float = false})
 	append(&parse_info.types, DataType{size = 2, name = "short", is_struct = false, is_float = false})
 	append(&parse_info.types, DataType{size = 4, name = "int",   is_struct = false, is_float = false})
-	append(&parse_info.types, DataType{size = 8, name = "long",  is_struct = false, is_float = false})
+	append(&parse_info.types, DataType{size = 4, name = "long",  is_struct = false, is_float = false})
 }
 
 @(private="package")

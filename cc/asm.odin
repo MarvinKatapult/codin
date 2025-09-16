@@ -6,8 +6,8 @@ import "core:os/os2"
 import "core:sys/linux/"
 
 @(private="file")
-INT_BYTE_SIZE :: 8
-ENTRY_LABEL :: "_start"
+PTR_SIZE :: 4
+ENTRY_LABEL :: "main"
 
 @(private="file")
 FunctionInfo :: struct {
@@ -27,13 +27,13 @@ FunctionScope :: struct {
 	variables:   map[string]Variable,
 	label:       string,
 	label_count: ^int,
-	rbp_offset:  ^int,
+	ebp_offset:  ^int,
 	break_label: string,
 }
 
 Variable :: struct {
 	type:       DataType,
-	rbp_offset: string,
+	ebp_offset: string,
 }
 
 @(private="file")
@@ -58,7 +58,7 @@ generate_asm_for_if :: proc(str_b: ^strings.Builder, if_node: ^AstNode,
 
 	// Checking condition
 	if !generate_asm_for_expr(str_b, if_node.childs[0], func_scope, file_info) do return false
-	strings.write_string(str_b, "\tcmp rax, 0\t; IF Check if condition is false\n")
+	strings.write_string(str_b, "\tcmp eax, 0\t; IF Check if condition is false\n")
 	strings.write_string(str_b, "\tje ")
 	potential_else := write_label(str_b, func_scope, advance = true)
 	strings.write_string(str_b, "\t\t; Jump over scope if condition is false\n")
@@ -77,7 +77,7 @@ generate_asm_for_if :: proc(str_b: ^strings.Builder, if_node: ^AstNode,
 		// Here are nodes such as else and else if
 		if else_or_else_if.type == .AST_ELSE_IF {
 			if !generate_asm_for_expr(str_b, else_or_else_if.childs[0], func_scope, file_info) do return false
-			strings.write_string(str_b, "\tcmp rax, 0\t; ELSE-IF Check if condition is false\n")
+			strings.write_string(str_b, "\tcmp eax, 0\t; ELSE-IF Check if condition is false\n")
 			strings.write_string(str_b, "\tje ")
 			potential_else := write_label(str_b, func_scope, advance = true)
 			strings.write_string(str_b, "\t\t; Jump over scope if condition is false\n")
@@ -115,7 +115,7 @@ generate_asm_for_while :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 
 	generate_asm_for_expr(str_b, condition_node, func_scope, file_info) or_return
 
-	strings.write_string(str_b, "\tcmp rax, 0\t; Check if condition is false\n")
+	strings.write_string(str_b, "\tcmp eax, 0\t; Check if condition is false\n")
 	strings.write_string(str_b, "\tje ")
 	after_while := write_label(str_b, func_scope, advance = true)
 	strings.write_string(str_b, "\t\t; Jump to end of while\n\n")
@@ -156,7 +156,7 @@ generate_asm_for_for :: proc(str_b: ^strings.Builder, statement_node: ^AstNode,
 	if condition.type != .AST_NOTHING {
 		generate_asm_for_expr(str_b, condition, func_scope, file_info) or_return
 
-		strings.write_string(str_b, "\tcmp rax, 0\t; Check if condition is false\n")
+		strings.write_string(str_b, "\tcmp eax, 0\t; Check if condition is false\n")
 		strings.write_string(str_b, "\tje ")
 		write_label(str_b, func_scope)
 		strings.write_string(str_b, "\t\t; Jump to end of for\n\n")
@@ -192,93 +192,93 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 
 	switch expression_t.operator {
 		case .OP_BIT_NEGATION:
-			strings.write_string(str_b, "\tnot rax\t\t; negating Value in RAX (~)\n")
+			strings.write_string(str_b, "\tnot eax\t\t; negating Value in EAX (~)\n")
 		case .OP_LOGICAL_NOT:
-			strings.write_string(str_b, "\txor rax, 1\t; Flip LSB true <-> false\n")
+			strings.write_string(str_b, "\txor eax, 1\t; Flip LSB true <-> false\n")
 		case .OP_UNARY_MINUS:
-			strings.write_string(str_b, "\tneg rax\t\t; negating Value in RAX (~)\n")
+			strings.write_string(str_b, "\tneg eax\t\t; negating Value in EAX (~)\n")
 		case .OP_BINARY_PLUS:
-			strings.write_string(str_b, "\tadd rax, rdi\t; Adding rax and rdi\n")
+			strings.write_string(str_b, "\tadd eax, edi\t; Adding eax and edi\n")
 		case .OP_BINARY_MINUS:
-			strings.write_string(str_b, "\tsub rdi, rax\t; Subtracting rdi from rax\n")
-			strings.write_string(str_b, "\tmov rax, rdi\t; Moving result in rax\n")
+			strings.write_string(str_b, "\tsub edi, eax\t; Subtracting edi from eax\n")
+			strings.write_string(str_b, "\tmov eax, edi\t; Moving result in eax\n")
 		case .OP_BINARY_MULT:
-			strings.write_string(str_b, "\tmul rdi\t\t; Multiplying rdi with rax\n")
+			strings.write_string(str_b, "\tmul edi\t\t; Multiplying edi with eax\n")
 		case .OP_BINARY_DIV:
-			strings.write_string(str_b, "\tmov rdx, rdi	; Moving rdi to rdx\n")
-			strings.write_string(str_b, "\tmov rcx, rax	; Moving rax to rcx\n")
-			strings.write_string(str_b, "\tmov rax, rdx	; moving rdx in rax\n")
-			strings.write_string(str_b, "\tcqo\t\t; Expand RAX to RAX:RDX 128 Bit Register\n")
-			strings.write_string(str_b, "\tidiv rcx\t; RAX = RAX / RCX\n")
+			strings.write_string(str_b, "\tmov edx, edi	; Moving edi to edx\n")
+			strings.write_string(str_b, "\tmov ecx, eax	; Moving eax to ecx\n")
+			strings.write_string(str_b, "\tmov eax, edx	; moving edx in eax\n")
+			strings.write_string(str_b, "\tcdq\n")
+			strings.write_string(str_b, "\tidiv ecx\t; EAX = EAX / ECX\n")
 		case .OP_BINARY_MOD:
-			strings.write_string(str_b, "\tmov rdx, rdi	; Moving rdi to rdx\n")
-			strings.write_string(str_b, "\tmov rcx, rax	; Moving rax to rcx\n")
-			strings.write_string(str_b, "\tmov rax, rdx	; moving rdx in rax\n")
-			strings.write_string(str_b, "\tcqo\t\t; Expand RAX to RAX:RDX 128 Bit Register\n")
-			strings.write_string(str_b, "\tidiv rcx\t; RAX = RAX / RCX\n")
-			strings.write_string(str_b, "\tmov rax, rdx\t; Move remainder into rax\n")
+			strings.write_string(str_b, "\tmov edx, edi	; Moving edi to edx\n")
+			strings.write_string(str_b, "\tmov ecx, eax	; Moving eax to ecx\n")
+			strings.write_string(str_b, "\tmov eax, edx	; moving edx in eax\n")
+			strings.write_string(str_b, "\tcdq\n")
+			strings.write_string(str_b, "\tidiv ecx\t; EAX = EAX / ECX\n")
+			strings.write_string(str_b, "\tmov eax, edx\t; Move remainder into eax\n")
 		case .OP_BINARY_LESS:
-			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax < rdi\n")
+			strings.write_string(str_b, "\tcmp edi, eax\t; Compare eax < edi\n")
 			strings.write_string(str_b, "\tsetl al\t\t; Set al to 1 if true\n")
-			strings.write_string(str_b, "\tmovsx rax, al\t; Extend al to rax\n")
+			strings.write_string(str_b, "\tmovsx eax, al\t; Extend al to eax\n")
 		case .OP_BINARY_LESS_EQUAL:
-			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax <= rdi\n")
+			strings.write_string(str_b, "\tcmp edi, eax\t; Compare eax <= edi\n")
 			strings.write_string(str_b, "\tsetle al\t\t; Set al to 1 if true\n")
-			strings.write_string(str_b, "\tmovsx rax, al\t; Extend al to rax\n")
+			strings.write_string(str_b, "\tmovsx eax, al\t; Extend al to eax\n")
 		case .OP_BINARY_GREATER:
-			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax > rdi\n")
+			strings.write_string(str_b, "\tcmp edi, eax\t; Compare eax > edi\n")
 			strings.write_string(str_b, "\tsetg al\t\t; Set al to 1 if true\n")
-			strings.write_string(str_b, "\tmovsx rax, al\t; Extend al to rax\n")
+			strings.write_string(str_b, "\tmovsx eax, al\t; Extend al to eax\n")
 		case .OP_BINARY_GREATER_EQUAL:
-			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax >= rdi\n")
+			strings.write_string(str_b, "\tcmp edi, eax\t; Compare eax >= edi\n")
 			strings.write_string(str_b, "\tsetge al\t\t; Set al to 1 if true\n")
-			strings.write_string(str_b, "\tmovsx rax, al\t; Extend al to rax\n")
+			strings.write_string(str_b, "\tmovsx eax, al\t; Extend al to eax\n")
 		case .OP_BINARY_EQUAL:
-			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax == rdi\n")
+			strings.write_string(str_b, "\tcmp edi, eax\t; Compare eax == edi\n")
 			strings.write_string(str_b, "\tsete al\t\t; Set al to 1 if true\n")
-			strings.write_string(str_b, "\tmovsx rax, al\t; Extend al to rax\n")
+			strings.write_string(str_b, "\tmovsx eax, al\t; Extend al to eax\n")
 		case .OP_BINARY_NOT_EQUAL:
-			strings.write_string(str_b, "\tcmp rdi, rax\t; Compare rax != rdi\n")
+			strings.write_string(str_b, "\tcmp edi, eax\t; Compare eax != edi\n")
 			strings.write_string(str_b, "\tsetne al\t; Set al to 1 if true\n")
-			strings.write_string(str_b, "\tmovsx rax, al\t; Extend al to rax\n")
+			strings.write_string(str_b, "\tmovsx eax, al\t; Extend al to eax\n")
 		case .OP_LOGICAL_OR:
-			strings.write_string(str_b, "\ttest rdi, rdi\t; Check if rdi != 0\n")
-			strings.write_string(str_b, "\tsetnz dl\t; dl = (rdi != 0) ? 1 : 0\n")
+			strings.write_string(str_b, "\ttest edi, edi\t; Check if edi != 0\n")
+			strings.write_string(str_b, "\tsetnz dl\t; dl = (edi != 0) ? 1 : 0\n")
 			strings.write_string(str_b, "\tjnz ")
 			write_label(str_b, func_scope)
 			strings.write_string(str_b, "\t\t; Short Circuit Evaluation\n")
-			strings.write_string(str_b, "\ttest rax, rax\t; Check if rax != 0\n")
+			strings.write_string(str_b, "\ttest eax, eax\t; Check if eax != 0\n")
 			strings.write_string(str_b, "\tsetnz al \t; al = 1 if 0F == 1 else = 0\n")
 			strings.write_string(str_b, "\tor dl, al\t; Logical OR\n\t")
 			write_label(str_b, func_scope, advance = true)
 			strings.write_string(str_b, ":\n")
-			strings.write_string(str_b, "\tmovzx rax, dl\t; -> 64-Bit\n")
+			strings.write_string(str_b, "\tmovzx eax, dl\t; -> 64-Bit\n")
 		case .OP_LOGICAL_AND:
-			strings.write_string(str_b, "\ttest rdi, rdi\t; Check if rdi != 0\n")
-			strings.write_string(str_b, "\tsetnz dl\t; dl = (rdi != 0) ? 1 : 0\n")
+			strings.write_string(str_b, "\ttest edi, edi\t; Check if edi != 0\n")
+			strings.write_string(str_b, "\tsetnz dl\t; dl = (edi != 0) ? 1 : 0\n")
 			strings.write_string(str_b, "\tjz ")
 			write_label(str_b, func_scope)
 			strings.write_string(str_b, "\t\t; Short Circuit Evaluation\n")
-			strings.write_string(str_b, "\ttest rax, rax\t; Check if rax != 0\n")
+			strings.write_string(str_b, "\ttest eax, eax\t; Check if eax != 0\n")
 			strings.write_string(str_b, "\tsetnz al \t; al = 1 if 0F == 1 else = 0\n")
 			strings.write_string(str_b, "\tand dl, al\t; Logical AND\n\t")
 			write_label(str_b, func_scope, advance = true)
 			strings.write_string(str_b, ":\n")
-			strings.write_string(str_b, "\tmovzx rax, dl\t; -> 64-Bit\n")
+			strings.write_string(str_b, "\tmovzx eax, dl\t; -> 64-Bit\n")
 		case .OP_BIT_OR:
-			strings.write_string(str_b, "\tor rax, rdi\t; Bit OR\n")
+			strings.write_string(str_b, "\tor eax, edi\t; Bit OR\n")
 		case .OP_BIT_AND:
-			strings.write_string(str_b, "\tand rax, rdi\t; Bit AND\n")
+			strings.write_string(str_b, "\tand eax, edi\t; Bit AND\n")
 		case .OP_BIT_XOR:
-			strings.write_string(str_b, "\txor rax, rdi\t; Bit XOR\n")
+			strings.write_string(str_b, "\txor eax, edi\t; Bit XOR\n")
 		case .OP_BIT_SHL:
-			strings.write_string(str_b, "\tmov rcx, rax\t; Only cl can be used for shift operations\n")
-			strings.write_string(str_b, "\tsal rdi, cl\t; rax << rdi\n")
-			strings.write_string(str_b, "\tmov rax, rdi\t\n")
+			strings.write_string(str_b, "\tmov ecx, eax\t; Only cl can be used for shift operations\n")
+			strings.write_string(str_b, "\tsal edi, cl\t; eax << edi\n")
+			strings.write_string(str_b, "\tmov eax, edi\t\n")
 		case .OP_BIT_SHR:
-			strings.write_string(str_b, "\tmov rcx, rax\t; Only cl can be used for shift operations\n")
-			strings.write_string(str_b, "\tsar rdi, cl\t; rax >> rdi\n")
-			strings.write_string(str_b, "\tmov rax, rdi\t\n")
+			strings.write_string(str_b, "\tmov ecx, eax\t; Only cl can be used for shift operations\n")
+			strings.write_string(str_b, "\tsar edi, cl\t; eax >> edi\n")
+			strings.write_string(str_b, "\tmov eax, edi\t\n")
 		case .OP:
 			log(.Error, "Not a valid Operator:", fmt.tprintf("%s", expression_node^))
 			return false
@@ -307,8 +307,8 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 
 			var := func_scope.variables[expression_t.value]
 			write_str := fmt.tprintf(
-				"\tmov %s %s, %s ; moving value of variable %s directly into rax\n\n",
-				size_keyword_for_type(var.type), register_for_type(var.type), var.rbp_offset, expression_t.value
+				"\tmov %s, %s %s ; moving value of variable %s directly into eax\n\n",
+				register_for_type(var.type), size_keyword_for_type(var.type), var.ebp_offset, expression_t.value
 			)
 
 			strings.write_string(str_b, write_str)
@@ -318,9 +318,9 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 				log(.Error, "Constant Expression Type cannot have childs")
 				return false
 			}
-			strings.write_string(str_b, "\tmov rax, ")
+			strings.write_string(str_b, "\tmov eax, ")
 			strings.write_string(str_b, expression_t.value)
-			strings.write_string(str_b, "\t; moving value of expression directly into rax\n\n")
+			strings.write_string(str_b, "\t; moving value of expression directly into eax\n\n")
 			return true
 		case .AST_EXPR_UNARY:
 			if len(expression_node.childs) != 1 {
@@ -341,12 +341,12 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 			valuel := expression_node.childs[0]
 			if !generate_asm_for_expr(str_b, valuel, func_scope, file_info) do return false
 		
-			strings.write_string(str_b, "\tpush rax\t; Push to stack\n\n")
+			strings.write_string(str_b, "\tpush eax\t; Push to stack\n\n")
 
 			valuer := expression_node.childs[1]
 			if !generate_asm_for_expr(str_b, valuer, func_scope, file_info) do return false
 
-			strings.write_string(str_b, "\tpop rdi\t\t; Popping Value to rdi off stack\n\n")
+			strings.write_string(str_b, "\tpop edi\t\t; Popping Value to edi off stack\n\n")
 
 			return generate_asm_for_operator(str_b, expression_node, func_scope)
 		case .AST_FUNC_CALL:
@@ -372,16 +372,16 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 			}
 
 			// Put parameters for call on stack
-			original_rbp_offset := func_scope.rbp_offset^
+			original_ebp_offset := func_scope.ebp_offset^
 			#reverse for child, i in expression_node.childs {
 				generate_asm_for_expr(str_b, child, func_scope, file_info) or_return
 
 				strings.write_string(str_b, 
-					fmt.tprintf("\tpush rax\t; Allocate memory on the stack for parameter\n\n")
+					fmt.tprintf("\tpush eax\t; Allocate memory on the stack for parameter\n\n")
 				)
 
-				rbp_offset := func_scope.rbp_offset
-				rbp_offset^ = rbp_offset^ - 8
+				ebp_offset := func_scope.ebp_offset
+				ebp_offset^ = ebp_offset^ - PTR_SIZE
 			}
 			
 			strings.write_string(str_b, "\tcall ")
@@ -389,13 +389,13 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 			strings.write_string(str_b, "\t; Call Function\n\n")
 
 			// Reset Memory from parameters on stack
-			mem_to_free_from_stack := abs(func_scope.rbp_offset^ - original_rbp_offset)
+			mem_to_free_from_stack := abs(func_scope.ebp_offset^ - original_ebp_offset)
 			if mem_to_free_from_stack > 0 {
-				strings.write_string(str_b, "\tadd rsp, ")
+				strings.write_string(str_b, "\tadd esp, ")
 				strings.write_int(str_b, mem_to_free_from_stack)
 				strings.write_string(str_b, "\t; Resetting Stack for func call\n\n")
 
-				func_scope.rbp_offset^ += mem_to_free_from_stack
+				func_scope.ebp_offset^ += mem_to_free_from_stack
 			}
 
 			return true
@@ -410,8 +410,8 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 generate_asm_for_var_declare :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
 									 func_scope: ^FunctionScope, file_info: ^FileInfo) -> bool {
 
-	strings.write_string(str_b, "\tsub rsp, ")
-	strings.write_int(str_b,	INT_BYTE_SIZE)
+	strings.write_string(str_b, "\tsub esp, ")
+	strings.write_int(str_b,	PTR_SIZE)
 	strings.write_string(str_b, "\t; Allocate memory on the stack\n\n")
 
 	statement_t := statement_node.value.(AstStatement)
@@ -420,10 +420,10 @@ generate_asm_for_var_declare :: proc(str_b: ^strings.Builder, statement_node: ^A
 		return false
 	}
 
-	rbp_offset := func_scope.rbp_offset
-	rbp_offset^ = rbp_offset^ - statement_t.type.size
+	ebp_offset := func_scope.ebp_offset
+	ebp_offset^ = ebp_offset^ - statement_t.type.size
 
-	variable := Variable{type = statement_t.type, rbp_offset = strings.clone(fmt.tprintf("[rbp%d]", rbp_offset^))}
+	variable := Variable{type = statement_t.type, ebp_offset = strings.clone(fmt.tprintf("[ebp%d]", ebp_offset^))}
 	func_scope.variables[statement_t.identifier] = variable
 
 	if len(statement_node.childs) > 0 {
@@ -440,7 +440,6 @@ register_for_type :: proc(type: DataType) -> string {
 		case 1: return "al"
 		case 2: return "ax"
 		case 4: return "eax"
-		case 8: return "rax"
 	}
 
 	assert(false)
@@ -463,7 +462,6 @@ size_keyword_for_type :: proc(type: DataType) -> string {
 @(private="file")
 generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
 								   func_scope: ^FunctionScope, file_info: ^FileInfo) -> bool {
-	log(.Debug, fmt.tprint(statement_node))
 	statement_t := statement_node.value.(AstStatement)
 
 	#partial switch statement_node.type {
@@ -475,13 +473,7 @@ generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^Ast
 
 			if statement_node.type == .AST_RETURN_STATEMENT {
 				strings.write_string(str_b, "\tleave\t\t; Restore old BasePointer and Free Stack memory\n")
-				if func_scope.label != ENTRY_LABEL {
-					strings.write_string(str_b, "\tret \t\t; Returning\n\n")
-				} else {
-					strings.write_string(str_b, "\tmov rdi, rax\t; move calculated return value in rdi\n")
-					strings.write_string(str_b, "\tmov rax, 60\t; (sys_exit)\n")
-					strings.write_string(str_b, "\tsyscall\t\t; Shutting down program\n")
-				}
+				strings.write_string(str_b, "\tret \t\t; Returning\n\n")
 			}
 		case .AST_VAR_DECLARE:
 			generate_asm_for_var_declare(str_b, statement_node, func_scope, file_info) or_return
@@ -499,7 +491,7 @@ generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^Ast
 			var: Variable = func_scope.variables[statement_t.identifier]
 			mov_string := fmt.tprintf(
 				"\tmov %s %s, %s \t; mov calculated value into variable: %s\n\n",
-				size_keyword_for_type(var.type), var.rbp_offset, register_for_type(var.type), statement_t.identifier
+				size_keyword_for_type(var.type), var.ebp_offset, register_for_type(var.type), statement_t.identifier
 			)
 			strings.write_string(str_b, mov_string)
 		case .AST_IF:
@@ -534,8 +526,8 @@ clone_func_scope :: proc(func_scope: ^FunctionScope) -> (ret: ^FunctionScope) {
 	ret.variables = clone_variables(func_scope.variables)^
 	ret.label = func_scope.label
 
-	ret.rbp_offset = new(int)
-	ret.rbp_offset^ = func_scope.rbp_offset^
+	ret.ebp_offset = new(int)
+	ret.ebp_offset^ = func_scope.ebp_offset^
 
 	ret.label_count = func_scope.label_count
 
@@ -571,25 +563,25 @@ generate_asm_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNo
 	strings.write_string(str_b, function_label)
 	strings.write_string(str_b, ":\n")
 
-	strings.write_string(str_b, "\tpush rbp\t; Save old base pointer\n")
-	strings.write_string(str_b, "\tmov rbp, rsp\t; Set new Base pointer\n\n")
+	strings.write_string(str_b, "\tpush ebp\t; Save old base pointer\n")
+	strings.write_string(str_b, "\tmov ebp, esp\t; Set new Base pointer\n\n")
 
 	func_scope := FunctionScope {
 		variables = make(map[string]Variable),
 		label_count = new(int),
-		rbp_offset = new(int),
+		ebp_offset = new(int),
 		label = function_label
 	}
 
-	rbp_offset: int = 0
+	ebp_offset: int = 0
 
-	parameter_rbp_offset: int = 8
+	parameter_ebp_offset: int = PTR_SIZE
 	for child in function_node.childs {
 		if child.type != .AST_VAR_DECLARE do continue
 
 		statement_t := child.value.(AstStatement)
-		parameter_rbp_offset += 8
-		variable := Variable{type = statement_t.type, rbp_offset = strings.clone(fmt.tprintf("[rbp+%d]", parameter_rbp_offset))}
+		parameter_ebp_offset += PTR_SIZE
+		variable := Variable{type = statement_t.type, ebp_offset = strings.clone(fmt.tprintf("[ebp+%d]", parameter_ebp_offset))}
 		func_scope.variables[statement_t.identifier] = variable
 	}
 
@@ -639,7 +631,7 @@ generate_for_ast_node :: proc(str_b: ^strings.Builder, node: ^AstNode, file_info
 			if !generate_asm_for_function(str_b, node, file_info) do return false
 		case .AST_FUNCTION_DECLARE: 
 			if !collect_metadata_function(file_info, node) do return false
-			strings.write_string(str_b, fmt.tprintf("; Extern Reference %s\n\n", node.value.(AstFunction).identifier))
+			strings.write_string(str_b, fmt.tprintf("extern %s; Extern Reference\n\n", node.value.(AstFunction).identifier))
 	}
 	return true
 }
@@ -659,11 +651,13 @@ generate_asm :: proc(ast: ^AstNode) -> string {
 
 @(private="package")
 compile_asm :: proc(src_name: string) -> bool {
-	obj_file_name := fmt.tprintf("%s.o", compile_flags.output_file)
+	obj_file_name := fmt.tprintf("output/%s.o", compile_flags.output_file)
+	p_desc: os2.Process_Desc = {
+		command = {"nasm", src_name, "-f", "elf", "-o", obj_file_name},
+	} 
+	log(.Proto, fmt.tprintf("Command for Nasm:%s", fmt.tprint(p_desc.command)))
 	process_state, stdout, stderr, err := os2.process_exec(
-		os2.Process_Desc {
-			command = {"nasm", src_name, "-f ELF64", "-o", obj_file_name},
-		},
+		p_desc,
 		context.temp_allocator
 	)
 
@@ -685,10 +679,22 @@ compile_asm :: proc(src_name: string) -> bool {
 
 	// Linking
 	log(.Proto, "Linking of executeable")
+	p_desc = {
+		command = { 
+			"ld", 
+			"-m", "elf_i386", 
+			"-o", compile_flags.output_file, 
+			obj_file_name,
+			"-lc", 
+			"/usr/lib32/crt1.o", 
+			"/usr/lib32/crti.o", 
+			"/usr/lib32/crtn.o", 
+			"-dynamic-linker", "/lib/ld-linux.so.2"
+		}
+	}
+	log(.Proto, fmt.tprint(p_desc.command))
 	process_state, stdout, stderr, err = os2.process_exec(
-		os2.Process_Desc {
-			command = {"ld", "-melf_x86_64", obj_file_name, "-o", compile_flags.output_file},
-		},
+		p_desc,
 		context.temp_allocator
 	)
 
@@ -700,6 +706,7 @@ compile_asm :: proc(src_name: string) -> bool {
 
 	if err != nil {
 		log(.Error, "ld could not be started!\n")
+		log(.Error, fmt.tprint(err))
 		return false
 	}
 
