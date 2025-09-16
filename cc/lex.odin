@@ -55,6 +55,7 @@ TokenType :: enum {
 	T_COMMA,
 	T_UNSIGNED,
 	T_SIGNED,
+	T_SINGLE_QUOTE,
 }
 
 @(private="package")
@@ -69,7 +70,7 @@ Token :: struct {
 WHITESPACE :: "\t\n\v\f\r "
 
 @(private="file")
-is_special_symbol :: proc(symbol: rune) -> (bool, TokenType) {
+is_special_symbol :: proc(symbol: rune, is_in_single_quotes: ^bool) -> (bool, TokenType) {
 	switch (symbol) {
 		case '{':
 			return true, TokenType.T_OPEN_BRACE
@@ -109,6 +110,9 @@ is_special_symbol :: proc(symbol: rune) -> (bool, TokenType) {
 			return true, TokenType.T_BIT_XOR
 		case ',':
 			return true, TokenType.T_COMMA
+		case '\'':
+			is_in_single_quotes^ = !is_in_single_quotes^
+			return true, TokenType.T_SINGLE_QUOTE
 	}
 
 	return false, nil
@@ -199,10 +203,20 @@ lex :: proc(filename: string) -> [dynamic]Token {
 	token: Token
 	x: u32 = 1
 	y: u32 = 1
-	in_line_comment: bool = false
-	comment: bool = false
+	in_line_comment:     bool = false
+	comment:             bool = false
+	is_in_single_quotes: bool = false
 	for c, i in file_str {
 		defer x += 1
+
+		if is_in_single_quotes && c != '\'' {
+			token.type = .T_IDENTIFIER
+			token.value = utf8.runes_to_string([]rune{c})
+			token.x = x
+			token.y = y
+			append(&ret, token)
+			continue
+		}
 
 		last_token := i == len(file_str) - 1
 		if last_token {
@@ -236,7 +250,7 @@ lex :: proc(filename: string) -> [dynamic]Token {
 		if in_line_comment || comment do continue
 
 		is_space := strings.is_space(c)
-		special_symbol, type := is_special_symbol(c)
+		special_symbol, type := is_special_symbol(c, &is_in_single_quotes)
 
 		if c == '=' && i != 0 {
 			last_token := &ret[len(ret)-1]
@@ -359,7 +373,7 @@ lex :: proc(filename: string) -> [dynamic]Token {
 			continue
 		}
 
-		parse_token := is_space || special_symbol || last_token
+		parse_token := (is_space || special_symbol || last_token)
 
 		if parse_token {
 			// If buffer is still filled, identify string

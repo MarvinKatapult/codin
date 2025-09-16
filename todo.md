@@ -4,6 +4,7 @@
 # 1
 - Post and Prefix Operator
 - do-while-loop
+- \n \t ... 
 
 # 2
 - Datatypes

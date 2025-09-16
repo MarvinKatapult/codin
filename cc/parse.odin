@@ -212,6 +212,37 @@ is_token_unary_operator :: proc(token: ^Token) -> bool {
 	return false
 }
 
+get_integer_literal_value :: proc(iter: ^TokenIter) -> (val: string , ok: bool) {
+	if current_token(iter).type == .T_SINGLE_QUOTE {
+		next_token(iter)
+
+		if len(current_token(iter).value) != 1 {
+			log_error_with_token(current_token(iter)^, "Single quotes only allow one character")
+			return "", false
+		}
+
+		char := current_token(iter).value[0]
+
+		next_token(iter)
+		if current_token(iter).type != .T_SINGLE_QUOTE {
+			log_error_with_token(current_token(iter)^, "Expected closing \"\'\" after character")
+			return "", false
+		}
+		
+		log(.Debug, fmt.tprint(char))
+		val = strings.clone(fmt.tprintf("%d", char))
+		log(.Debug, val)
+		return val, true
+	}
+
+	if current_token(iter).type == .T_INT_LITERAL {
+		val = current_token(iter).value
+		return val, true
+	}
+
+	return val, false
+}
+
 @(private="file")
 resolve_expr_primary :: proc(iter: ^TokenIter, no_expr_possible := true) -> (node: ^AstNode, ok: bool) {
 	
@@ -233,9 +264,10 @@ resolve_expr_primary :: proc(iter: ^TokenIter, no_expr_possible := true) -> (nod
 	}
 
 	// 3, 4, 7
-	if current_token(iter).type == .T_INT_LITERAL {
+	number, is_number := get_integer_literal_value(iter)
+	if is_number {
 		expression_t: AstExpression
-		expression_t.value = strings.clone(current_token(iter).value)
+		expression_t.value = number
 		node.value = expression_t
 		node.type = .AST_EXPR_CONSTANT
 		
