@@ -279,6 +279,22 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
 			strings.write_string(str_b, "\tmov ecx, eax\t; Only cl can be used for shift operations\n")
 			strings.write_string(str_b, "\tsar edi, cl\t; eax >> edi\n")
 			strings.write_string(str_b, "\tmov eax, edi\t\n")
+		case .OP_ADRESS:
+			if expression_node.childs[0].type != .AST_EXPR_VARIABLE {
+				log(.Error, "Adress Operator can only be used with a variable")
+				return false
+			}
+			var_expr_t := expression_node.childs[0].value.(AstExpression)
+			var := func_scope.variables[var_expr_t.value]
+
+			strings.write_string(str_b, fmt.tprintf("\tlea eax, %s\t; Load adress of variable\n", var.ebp_offset))
+		case .OP_DEREFERENCE:
+			if expression_node.childs[0].type != .AST_EXPR_VARIABLE {
+				log(.Error, "Adress Operator can only be used with a variable")
+				return false
+			}
+
+			strings.write_string(str_b, "\tmov eax, [eax]\t; Dereference variable\n")
 		case .OP:
 			log(.Error, "Not a valid Operator:", fmt.tprintf("%s", expression_node^))
 			return false
@@ -477,6 +493,7 @@ generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^Ast
 			}
 		case .AST_VAR_DECLARE:
 			generate_asm_for_var_declare(str_b, statement_node, func_scope, file_info) or_return
+		case .AST_VAR_DEREF_ASSIGNMENT: fallthrough
 		case .AST_VAR_ASSIGNMENT:
 			if len(statement_node.childs) <= 0 do return false
 			ok := generate_asm_for_expr(str_b, statement_node.childs[0], func_scope, file_info)
@@ -489,10 +506,24 @@ generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^Ast
 				return false
 			}
 			var: Variable = func_scope.variables[statement_t.identifier]
-			mov_string := fmt.tprintf(
-				"\tmov %s %s, %s \t; mov calculated value into variable: %s\n\n",
-				size_keyword_for_type(var.type), var.ebp_offset, register_for_type(var.type), statement_t.identifier
-			)
+
+			mov_string: string
+			if statement_node.type == .AST_VAR_DEREF_ASSIGNMENT {
+				strings.write_string(str_b, fmt.tprintf(
+						"\tmov ebx, %s %s\t; Mov ptr value of %s into edi\n",
+						size_keyword_for_type(var.type), var.ebp_offset, statement_t.identifier
+					)
+				)
+				mov_string = fmt.tprintf(
+					"\tmov %s [ebx], %s \t; mov calculated value into variable: %s\n\n",
+					size_keyword_for_type(var.type), register_for_type(var.type), statement_t.identifier
+				)
+			} else {
+				mov_string = fmt.tprintf(
+					"\tmov %s %s, %s \t; mov calculated value into variable: %s\n\n",
+					size_keyword_for_type(var.type), var.ebp_offset, register_for_type(var.type), statement_t.identifier
+				)
+			}
 			strings.write_string(str_b, mov_string)
 		case .AST_IF:
 			generate_asm_for_if(str_b, statement_node, func_scope, file_info) or_return
@@ -590,6 +621,9 @@ generate_asm_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNo
 			if !generate_asm_for_scope(str_b, child, &func_scope, file_info) do return false
 		}
 	}
+
+	strings.write_string(str_b, "\tleave; Always leave and ret at end of function\n")
+	strings.write_string(str_b, "\tret\n")
 
 	return true
 }

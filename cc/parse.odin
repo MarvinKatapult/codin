@@ -17,6 +17,7 @@ NodeType :: enum {
 	AST_RETURN_STATEMENT,
 	AST_VAR_DECLARE,
 	AST_VAR_ASSIGNMENT,
+	AST_VAR_DEREF_ASSIGNMENT,
 	AST_EXPR_STATEMENT,
 	AST_EXPR_CONSTANT,
 	AST_EXPR_UNARY,
@@ -100,6 +101,8 @@ Operator :: enum {
 	OP_BINARY_NOT_EQUAL,
 	OP_LOGICAL_OR,
 	OP_LOGICAL_AND,
+	OP_ADRESS,
+	OP_DEREFERENCE,
 }
 
 @(private="package")
@@ -177,9 +180,10 @@ prev_token :: proc(iter: ^TokenIter) -> ^Token {
 @(private="file")
 get_operator_for_token :: proc(token: ^Token, unary: bool) -> (Operator, bool) {
 	#partial switch token.type {
-		case .T_MINUS:			return unary ? .OP_UNARY_MINUS : .OP_BINARY_MINUS, true
+		case .T_MINUS:			return unary ? .OP_UNARY_MINUS : .OP_BINARY_MINUS, 	true
+		case .T_AMPERSAND:		return unary ? .OP_ADRESS      : .OP_BIT_AND, 		true
+		case .T_STAR:			return unary ? .OP_DEREFERENCE : .OP_BINARY_MULT,	true
 		case .T_PLUS:			return .OP_BINARY_PLUS,			 true
-		case .T_STAR:			return .OP_BINARY_MULT,			 true
 		case .T_FSLASH:			return .OP_BINARY_DIV,			 true
 		case .T_PERCENT:		return .OP_BINARY_MOD,			 true
 		case .T_TILDE:			return .OP_BIT_NEGATION,		 true
@@ -193,7 +197,6 @@ get_operator_for_token :: proc(token: ^Token, unary: bool) -> (Operator, bool) {
 		case .T_LOGICAL_OR:		return .OP_LOGICAL_OR,			 true
 		case .T_LOGICAL_AND:	return .OP_LOGICAL_AND,			 true
 		case .T_BIT_XOR:		return .OP_BIT_XOR,				 true
-		case .T_BIT_AND:		return .OP_BIT_AND,				 true
 		case .T_BIT_OR:			return .OP_BIT_OR,				 true
 		case .T_SHIFT_LEFT:		return .OP_BIT_SHL,				 true
 		case .T_SHIFT_RIGHT:	return .OP_BIT_SHR,				 true
@@ -206,6 +209,8 @@ is_token_unary_operator :: proc(token: ^Token) -> bool {
 	#partial switch token.type {
 		case .T_EXCLAMATION : fallthrough
 		case .T_TILDE		: fallthrough
+		case .T_AMPERSAND		: fallthrough
+		case .T_STAR        : fallthrough
 		case .T_MINUS		:
 			return true
 	}
@@ -541,7 +546,7 @@ resolve_expr_bit_and :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possibl
 	}
 	
 	// |
-	for current_token(iter).type == .T_BIT_AND {
+	for current_token(iter).type == .T_AMPERSAND {
 
 		op_token := current_token(iter)
 		next_token(iter)
@@ -708,7 +713,6 @@ resolving_assignment :: proc(root: ^AstNode, iter: ^TokenIter, only_equal_assign
 	statement_t: AstStatement
 	statement_t.identifier = strings.clone(prev_token(iter).value)
 	root.value = statement_t
-	root.type = .AST_VAR_ASSIGNMENT
 	
 	op: Operator
 	if !token_assignment_operator(current_token(iter)^, &op, only_equal_assign) {
@@ -806,6 +810,7 @@ resolve_variable_declaration :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -
 
 		if current_token(iter).type == .T_ASSIGNMENT {
 			assignment_node := new(AstNode)
+			assignment_node.type = .AST_VAR_ASSIGNMENT
 			append_ast_node(node, assignment_node)
 
 			if parse_info.no_declare_and_assign || !resolving_assignment(assignment_node, iter) {
@@ -1001,8 +1006,16 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 	}
 
 	// Variable Assignment
-	if !parsed_stmt && current_token(iter).type == .T_IDENTIFIER {
+	if !parsed_stmt && 
+		(current_token(iter).type == .T_IDENTIFIER || 
+		(current_token(iter).type == .T_STAR && look_ahead_token(iter).type == .T_IDENTIFIER)) {
+
 		node.type = .AST_VAR_ASSIGNMENT
+
+		if current_token(iter).type == .T_STAR {
+			next_token(iter)
+			node.type = .AST_VAR_DEREF_ASSIGNMENT
+		}
 
 		if token_assignment_operator(look_ahead_token(iter)^, nil, only_equal_assign = false) {
 			next_token(iter)
@@ -1011,7 +1024,6 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 			}
 			parsed_stmt = true
 		} else {
-			// TODO: Duplicate code with Standalone expression - see:bottom
 			expr_node, ok := resolve_expr(node, iter)
 			if ok && expr_node.type != .AST_NOTHING {
 				append_ast_node(node, expr_node)

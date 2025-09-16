@@ -5,6 +5,7 @@
 - Post and Prefix Operator
 - do-while-loop
 - \n \t ... 
+- Assignments as standalone expressions
 
 # 2
 - Datatypes

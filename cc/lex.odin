@@ -44,7 +44,7 @@ TokenType :: enum {
 	T_ASSIGN_OR,
 	T_EQUAL_EQUAL,
 	T_NOT_EQUAL,
-	T_BIT_AND,
+	T_AMPERSAND,
 	T_BIT_OR,
 	T_BIT_XOR,
 	T_LOGICAL_AND,
@@ -103,7 +103,7 @@ is_special_symbol :: proc(symbol: rune, is_in_single_quotes: ^bool) -> (bool, To
 		case '=':
 			return true, TokenType.T_ASSIGNMENT
 		case '&':
-			return true, TokenType.T_BIT_AND
+			return true, TokenType.T_AMPERSAND
 		case '|':
 			return true, TokenType.T_BIT_OR
 		case '^':
@@ -310,7 +310,7 @@ lex :: proc(filename: string) -> [dynamic]Token {
 					delete(last_token.value)
 					last_token.value = ">>="
 					continue;
-				case .T_BIT_AND:
+				case .T_AMPERSAND:
 					last_token.type = .T_ASSIGN_AND
 					delete(last_token.value)
 					last_token.value = "&="
@@ -350,7 +350,7 @@ lex :: proc(filename: string) -> [dynamic]Token {
 
 		if c == '&' && i != 0 {
 			last_token := &ret[len(ret)-1]
-			if last_token.type == .T_BIT_AND {
+			if last_token.type == .T_AMPERSAND {
 				last_token.type = .T_LOGICAL_AND
 				delete(last_token.value)
 				last_token.value = "&&"
