@@ -850,7 +850,7 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 		expr := resolve_expr(node, iter, no_expr_possible = false) or_return
 		append_ast_node(node, expr)
 
-		if_scope := resolve_scope(iter, parse_info) or_return
+		if_scope := resolve_scope(iter, parse_info, allow_single_stmt = true) or_return
 		append_ast_node(node, if_scope)
 
 		for look_ahead_token(iter).type == .T_ELSE {
@@ -870,7 +870,7 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 				expr := resolve_expr(else_if_node, iter, no_expr_possible = false) or_return
 				append_ast_node(else_if_node, expr)
 
-				else_if_scope := resolve_scope(iter, parse_info) or_return
+				else_if_scope := resolve_scope(iter, parse_info, allow_single_stmt = true) or_return
 				append_ast_node(else_if_node, else_if_scope)
 
 				append_ast_node(node, else_if_node)
@@ -884,7 +884,7 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 
 			next_token(iter)  // {
 
-			else_scope := resolve_scope(iter, parse_info) or_return
+			else_scope := resolve_scope(iter, parse_info, allow_single_stmt = true) or_return
 			append_ast_node(else_node, else_scope)
 			break
 		}
@@ -910,7 +910,7 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 		parse_info.break_possible = true
 		defer parse_info.break_possible = tmp
 
-		while_scope := resolve_scope(iter, parse_info) or_return
+		while_scope := resolve_scope(iter, parse_info, allow_single_stmt = true) or_return
 		append_ast_node(node, while_scope)
 
 		return node, ok
@@ -962,7 +962,7 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 		parse_info.break_possible = true
 		defer parse_info.break_possible = tmp
 
-		scope := resolve_scope(iter, parse_info) or_return
+		scope := resolve_scope(iter, parse_info, allow_single_stmt = true) or_return
 		append_ast_node(node, scope)
 
 		return node, ok
@@ -1114,14 +1114,20 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter, parse_info: ^ParseInf
 }
 
 @(private="file")
-resolve_scope :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (scope_node: ^AstNode, ok: bool) {
+resolve_scope :: proc(iter: ^TokenIter, parse_info: ^ParseInfo, allow_single_stmt := false) -> (scope_node: ^AstNode, ok: bool) {
 	scope_t: AstScope
 	scope_node = new(AstNode)
 	scope_node.type = .AST_SCOPE
 	scope_node.value = scope_t
 
+	single_stmt := (current_token(iter).type != .T_OPEN_BRACE)
+	if single_stmt && !allow_single_stmt {
+		return scope_node, false
+	}
+	log(.Debug, fmt.tprint(single_stmt, allow_single_stmt, current_token(iter)))
+
 	// Skip \{
-	next_token(iter)
+	if !single_stmt do next_token(iter)
 
 	// int foo(void) {...}
 	for current_token(iter).type != .T_CLOSE_BRACE {
@@ -1131,6 +1137,9 @@ resolve_scope :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (scope_node: 
 		if !ok {
 			return scope_node, false
 		}
+
+		if single_stmt do break
+
 		next_token(iter)
 	}
 

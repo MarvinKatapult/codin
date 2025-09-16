@@ -463,6 +463,7 @@ size_keyword_for_type :: proc(type: DataType) -> string {
 @(private="file")
 generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
 								   func_scope: ^FunctionScope, file_info: ^FileInfo) -> bool {
+	log(.Debug, fmt.tprint(statement_node))
 	statement_t := statement_node.value.(AstStatement)
 
 	#partial switch statement_node.type {
