@@ -572,6 +572,7 @@ generate_asm_for_scope :: proc(str_b: ^strings.Builder, scope_node: ^AstNode,
 							   func_scope: ^FunctionScope, file_info: ^FileInfo) -> bool {
 
 	func_scope_clone := clone_func_scope(func_scope)
+	log(.Debug, fmt.tprint(func_scope_clone))
 
 	for child in scope_node.childs {
 		if child.type == .AST_SCOPE {

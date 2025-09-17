@@ -217,16 +217,48 @@ is_token_unary_operator :: proc(token: ^Token) -> bool {
 	return false
 }
 
+valid_single_quote_tokens :: proc(iter: ^TokenIter, val: ^u8) -> bool {
+
+	token := current_token(iter).value
+	if len(token) != 1 do return false
+
+	if token == "\\" {
+		next_token(iter)
+		terminated_char := current_token(iter).value
+		if len(terminated_char) != 1 do return false
+
+		switch terminated_char[0] {
+			case 'n':
+				val^ = '\n'
+				return true
+			case 't':
+				val^ = '\t'
+				return true
+			case '0':
+				val^ = 0
+				return true
+		}
+
+		return false
+	}
+
+	val^ = current_token(iter).value[0]
+	log(.Debug, fmt.tprint(val^))
+	return true
+}
+
 get_integer_literal_value :: proc(iter: ^TokenIter) -> (val: string , ok: bool) {
 	if current_token(iter).type == .T_SINGLE_QUOTE {
 		next_token(iter)
 
-		if len(current_token(iter).value) != 1 {
+		char: u8
+		if !valid_single_quote_tokens(iter, &char) {
 			log_error_with_token(current_token(iter)^, "Single quotes only allow one character")
 			return "", false
 		}
 
-		char := current_token(iter).value[0]
+		log(.Debug, "get_integer_literal_value: ", fmt.tprint(char))
+		val = strings.clone(fmt.tprintf("%d", char))
 
 		next_token(iter)
 		if current_token(iter).type != .T_SINGLE_QUOTE {
@@ -234,9 +266,6 @@ get_integer_literal_value :: proc(iter: ^TokenIter) -> (val: string , ok: bool) 
 			return "", false
 		}
 		
-		log(.Debug, fmt.tprint(char))
-		val = strings.clone(fmt.tprintf("%d", char))
-		log(.Debug, val)
 		return val, true
 	}
 
@@ -1168,7 +1197,6 @@ resolve_scope :: proc(iter: ^TokenIter, parse_info: ^ParseInfo, allow_single_stm
 	if single_stmt && !allow_single_stmt {
 		return scope_node, false
 	}
-	log(.Debug, fmt.tprint(single_stmt, allow_single_stmt, current_token(iter)))
 
 	// Skip \{
 	if !single_stmt do next_token(iter)
