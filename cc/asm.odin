@@ -685,7 +685,7 @@ generate_asm :: proc(ast: ^AstNode) -> string {
 
 @(private="package")
 compile_asm :: proc(src_name: string) -> bool {
-	obj_file_name := fmt.tprintf("output/%s.o", compile_flags.output_file)
+	obj_file_name := cc_flags.is_object ? cc_flags.output_file : fmt.tprintf("output/%s.o", cc_flags.output_file)
 	p_desc: os2.Process_Desc = {
 		command = {"nasm", src_name, "-f", "elf", "-o", obj_file_name},
 	} 
@@ -711,44 +711,46 @@ compile_asm :: proc(src_name: string) -> bool {
 		return false
 	}
 
-	// Linking
-	log(.Proto, "Linking of executeable")
-	p_desc = {
-		command = { 
-			"ld", 
-			"-m", "elf_i386", 
-			"-o", compile_flags.output_file, 
-			obj_file_name,
-			"-lc", 
-			"/usr/lib32/crt1.o", 
-			"/usr/lib32/crti.o", 
-			"/usr/lib32/crtn.o", 
-			"-dynamic-linker", "/lib/ld-linux.so.2"
+	if !cc_flags.is_object {
+		// Linking
+		log(.Proto, "Linking of executeable")
+		p_desc = {
+			command = { 
+				"ld", 
+				"-m", "elf_i386", 
+				"-o", cc_flags.output_file, 
+				obj_file_name,
+				"-lc", 
+				"/usr/lib32/crt1.o", 
+				"/usr/lib32/crti.o", 
+				"/usr/lib32/crtn.o", 
+				"-dynamic-linker", "/lib/ld-linux.so.2"
+			}
+		}
+		log(.Proto, fmt.tprint(p_desc.command))
+		process_state, stdout, stderr, err = os2.process_exec(
+			p_desc,
+			context.temp_allocator
+		)
+
+		if len(stderr) > 0 {
+			stderr_fmt := fmt.tprintf("%s%s%s", RED, transmute(string)stderr, RESET)
+			fmt.println(stderr_fmt)
+			return false
+		}
+
+		if err != nil {
+			log(.Error, "ld could not be started!\n")
+			log(.Error, fmt.tprint(err))
+			return false
 		}
 	}
-	log(.Proto, fmt.tprint(p_desc.command))
-	process_state, stdout, stderr, err = os2.process_exec(
-		p_desc,
-		context.temp_allocator
-	)
 
-	if len(stderr) > 0 {
-		stderr_fmt := fmt.tprintf("%s%s%s", RED, transmute(string)stderr, RESET)
-		fmt.println(stderr_fmt)
-		return false
-	}
-
-	if err != nil {
-		log(.Error, "ld could not be started!\n")
-		log(.Error, fmt.tprint(err))
-		return false
-	}
-
-	log(.Proto, "Compiling of file ", compile_flags.output_file, " was successful!")
+	log(.Proto, "Compiling of file ", cc_flags.output_file, " was successful!")
 
 	// r-xr-xr-x
-	if !compile_flags.is_object && os2.chmod(compile_flags.output_file, 0o755) != nil {
-		log(.Error, "File rights of ", compile_flags.output_file, " could not be set properly!")
+	if !cc_flags.is_object && os2.chmod(cc_flags.output_file, 0o755) != nil {
+		log(.Error, "File rights of ", cc_flags.output_file, " could not be set properly!")
 		return false
 	}
 

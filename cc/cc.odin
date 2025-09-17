@@ -8,7 +8,7 @@ CompileFlags :: struct {
 	output_file: string,
 	input_file: string,
 }
-compile_flags: CompileFlags = {
+cc_flags: CompileFlags = {
 	is_object = false,
 	output_file = "a.out",
 	input_file = "",
@@ -27,7 +27,7 @@ start_compiling :: proc() {
 	if !parse_args() {
 		os.exit(1)
 	}
-	log(.Debug, fmt.tprint(compile_flags))
+	log(.Debug, fmt.tprint(cc_flags))
 
 	if !compile_file() {
 		os.exit(1)
@@ -44,7 +44,7 @@ parse_args :: proc() -> bool {
 		}
 
 		if arg == "-c" {
-			compile_flags.is_object = true
+			cc_flags.is_object = true
 			continue
 		}
 
@@ -54,16 +54,16 @@ parse_args :: proc() -> bool {
 				return false
 			}
 			skip = true
-			compile_flags.output_file = os.args[i+1]
+			cc_flags.output_file = os.args[i+1]
 			continue
 		}
 		
-		if compile_flags.input_file != "" {
+		if cc_flags.input_file != "" {
 			log(.Error, "Too many input files specified!")
 			return false
 		}
 
-		compile_flags.input_file = arg
+		cc_flags.input_file = arg
 	}
 
 	return true
@@ -73,9 +73,9 @@ compile_file :: proc() -> bool {
 	context.allocator = context.temp_allocator
 	defer free_all(context.allocator)
 
-	log(.Proto, "Compiling file: ", compile_flags.input_file)
-	log(.Proto, "Lexing file: ", compile_flags.input_file)
-	tokens := lex(compile_flags.input_file)
+	log(.Proto, "Compiling file: ", cc_flags.input_file)
+	log(.Proto, "Lexing file: ", cc_flags.input_file)
+	tokens := lex(cc_flags.input_file)
 	if tokens == nil {
 		log(.Error, "Lexing was not successful")
 		return false
@@ -85,7 +85,7 @@ compile_file :: proc() -> bool {
 		log(.Proto, fmt.tprint(token))
 	}
 
-	log(.Proto, "Building AST for file: ", compile_flags.input_file)
+	log(.Proto, "Building AST for file: ", cc_flags.input_file)
 	ok, ast := build_ast(tokens[:])
 	log_ast(ast)
 	if !ok {
