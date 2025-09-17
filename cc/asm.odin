@@ -589,7 +589,10 @@ generate_asm_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNo
 	function_t := function_node.value.(AstFunction)
 
 	function_label := function_t.identifier
-	if function_label == "main" do function_label = ENTRY_LABEL
+	// This was actually relevant before, because we used the _start entry point
+	if function_label == "main" do function_label = ENTRY_LABEL 
+	// Now this is not really relevant but I'm still going to leave this here, 
+	// because I might want to change the entry point later
 
 	strings.write_string(str_b, function_label)
 	strings.write_string(str_b, ":\n")

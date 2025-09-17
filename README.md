@@ -3,11 +3,11 @@
 Unfinished C-Compiler written in Odin
 
 ## Dependencies
-- Odin
-- Nasm
-- ld
-- C-Runtime
-- Linux Dynamic Linker
+- Odin 					(https://github.com/odin-lang/Odin)
+- Nasm					(https://github.com/netwide-assembler/nasm)
+- gcc-multilib			(apt: gcc-multilib)
+- ld					(coreutil)
+- Linux Dynamic Linker  (coreutil)
 
 ## Highest level code supported by compiler
 ```c
