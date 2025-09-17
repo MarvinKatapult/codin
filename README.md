@@ -40,21 +40,20 @@ int get_left_most_digit(int n) {
 	return n;
 }
 
-int printnum(int a) {
+void printnum(int a) {
 
-	if (a == 0) putchar(0 + 48);
+	if (a == 0) putchar('0');
 	else {
 		while (a > 0) {
 			int left_most = get_left_most_digit(a);
-			putchar(left_most + 48); // + '0'
+			putchar(left_most + '0');
 
 			int count_digits = countdigits(a);
 			a -= left_most * exp(10, count_digits - 1);
 		}
 	}
 	
-	putchar(10); // \n
-	return 0;
+	putchar('\n');
 }
 
 int main(void) {
@@ -154,7 +153,7 @@ int main(void) {
                             [AST_EXPR_CONSTANT] 1 OP Parent: AST_EXPR_BINARY
             [AST_RETURN_STATEMENT]
                 [AST_EXPR_VARIABLE] n OP Parent: AST_RETURN_STATEMENT
-    [AST_FUNCTION] printnum DataType{name = "int", size = 4, is_float = false, unsigned = false, is_struct = false}
+    [AST_FUNCTION] printnum DataType{name = "void", size = 0, is_float = false, unsigned = false, is_struct = false}
         [AST_VAR_DECLARE] a
         [AST_SCOPE] Parent: AST_FUNCTION
             [AST_IF]
@@ -164,9 +163,7 @@ int main(void) {
                 [AST_SCOPE] Parent: AST_IF
                     [AST_EXPR_STATEMENT]
                         [AST_FUNC_CALL] putchar OP Parent: AST_EXPR_STATEMENT
-                            [AST_EXPR_BINARY]  OP_BINARY_PLUS Parent: AST_FUNC_CALL
-                                [AST_EXPR_CONSTANT] 0 OP Parent: AST_EXPR_BINARY
-                                [AST_EXPR_CONSTANT] 48 OP Parent: AST_EXPR_BINARY
+                            [AST_EXPR_CONSTANT] 48 OP Parent: AST_FUNC_CALL
                 [AST_ELSE]
                     [AST_SCOPE] Parent: AST_ELSE
                         [AST_WHILE]
@@ -200,8 +197,6 @@ int main(void) {
             [AST_EXPR_STATEMENT]
                 [AST_FUNC_CALL] putchar OP Parent: AST_EXPR_STATEMENT
                     [AST_EXPR_CONSTANT] 10 OP Parent: AST_FUNC_CALL
-            [AST_RETURN_STATEMENT]
-                [AST_EXPR_CONSTANT] 0 OP Parent: AST_RETURN_STATEMENT
     [AST_FUNCTION] main DataType{name = "int", size = 4, is_float = false, unsigned = false, is_struct = false}
         [AST_SCOPE] Parent: AST_FUNCTION
             [AST_EXPR_STATEMENT]
