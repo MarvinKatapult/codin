@@ -426,15 +426,15 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 generate_asm_for_var_declare :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
 									 func_scope: ^FunctionScope, file_info: ^FileInfo) -> bool {
 
-	strings.write_string(str_b, "\tsub esp, ")
-	strings.write_int(str_b,	PTR_SIZE)
-	strings.write_string(str_b, "\t; Allocate memory on the stack\n\n")
-
 	statement_t := statement_node.value.(AstStatement)
 	if statement_t.identifier in func_scope.variables {
 		log(.Error, "Variale redefinition!")
 		return false
 	}
+
+	strings.write_string(str_b, "\tsub esp, ")
+	strings.write_int(str_b,	statement_t.type.size)
+	strings.write_string(str_b, "\t; Allocate memory on the stack\n\n")
 
 	ebp_offset := func_scope.ebp_offset
 	ebp_offset^ = ebp_offset^ - statement_t.type.size
