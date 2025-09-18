@@ -30,6 +30,7 @@ NodeType :: enum {
 	AST_WHILE,
 	AST_FOR,
 	AST_BREAK,
+	AST_STRING_LITERAL,
 }
 
 @(private="package")
@@ -118,6 +119,8 @@ DataType :: struct {
 ParseInfo :: struct {
 	functions:             [dynamic]AstFunction,
 	types:                 [dynamic]DataType,
+	program_node:          ^AstNode,
+	global_count:          uint,
 	break_possible:        bool,
 	no_semicolon:          bool,
 	no_declare_and_assign: bool,
@@ -126,6 +129,12 @@ ParseInfo :: struct {
 @(private="package")
 append_ast_node :: proc(parent: ^AstNode, child: ^AstNode) {
 	append(&parent.childs, child)
+	child.parent = parent
+}
+
+@(private="package")
+prepend_ast_node :: proc(parent: ^AstNode, child: ^AstNode) {
+	inject_at(&parent.childs, 0, child)
 	child.parent = parent
 }
 
@@ -243,7 +252,6 @@ valid_single_quote_tokens :: proc(iter: ^TokenIter, val: ^u8) -> bool {
 	}
 
 	val^ = current_token(iter).value[0]
-	log(.Debug, fmt.tprint(val^))
 	return true
 }
 
@@ -257,7 +265,6 @@ get_integer_literal_value :: proc(iter: ^TokenIter) -> (val: string , ok: bool) 
 			return "", false
 		}
 
-		log(.Debug, "get_integer_literal_value: ", fmt.tprint(char))
 		val = strings.clone(fmt.tprintf("%d", char))
 
 		next_token(iter)
@@ -278,7 +285,7 @@ get_integer_literal_value :: proc(iter: ^TokenIter) -> (val: string , ok: bool) 
 }
 
 @(private="file")
-resolve_expr_primary :: proc(iter: ^TokenIter, no_expr_possible := true) -> (node: ^AstNode, ok: bool) {
+resolve_expr_primary :: proc(iter: ^TokenIter, parse_info: ^ParseInfo, no_expr_possible := true) -> (node: ^AstNode, ok: bool) {
 	
 	node = new(AstNode)
 	token_left(iter) or_return
@@ -286,7 +293,7 @@ resolve_expr_primary :: proc(iter: ^TokenIter, no_expr_possible := true) -> (nod
 	// ()
 	if current_token(iter).type == .T_OPEN_PARANTHESIS {
 		next_token(iter)
-		node = resolve_expr(nil, iter) or_return
+		node = resolve_expr(nil, iter, parse_info) or_return
 
 		if current_token(iter).type != .T_CLOSE_PARANTHESIS {
 			log(.Error, "Expected ')' but found:", fmt.tprintf("%s", current_token(iter).type))
@@ -294,6 +301,11 @@ resolve_expr_primary :: proc(iter: ^TokenIter, no_expr_possible := true) -> (nod
 		}
 
 		next_token(iter)
+		return node, true
+	}
+
+	if current_token(iter).type == .T_DOUBLE_QUOTE {
+		node = resolve_string_literals(iter, parse_info) or_return
 		return node, true
 	}
 
@@ -332,7 +344,7 @@ resolve_expr_primary :: proc(iter: ^TokenIter, no_expr_possible := true) -> (nod
 
 				first_param = false
 
-				expr := resolve_expr(node, iter, no_expr_possible = false) or_return
+				expr := resolve_expr(node, iter, parse_info, no_expr_possible = false) or_return
 				append_ast_node(node, expr)
 			}
 		} else {
@@ -352,7 +364,7 @@ resolve_expr_primary :: proc(iter: ^TokenIter, no_expr_possible := true) -> (nod
 		node.type = .AST_EXPR_UNARY
 
 		next_token(iter)
-		expr := resolve_expr_primary(iter, no_expr_possible = false) or_return
+		expr := resolve_expr_primary(iter, parse_info, no_expr_possible = false) or_return
 		append_ast_node(node, expr)
 		return node, true
 	}
@@ -368,9 +380,9 @@ resolve_expr_primary :: proc(iter: ^TokenIter, no_expr_possible := true) -> (nod
 }
 
 @(private="file")
-resolve_expr_dot :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (left_child: ^AstNode, ok: bool) {
+resolve_expr_dot :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true, parse_info: ^ParseInfo) -> (left_child: ^AstNode, ok: bool) {
 
-	left_child, ok = resolve_expr_primary(iter, no_expr_possible)
+	left_child, ok = resolve_expr_primary(iter, parse_info, no_expr_possible)
 	if !ok {
 		return left_child, false
 	}
@@ -385,7 +397,7 @@ resolve_expr_dot :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible :=
 		expression_t: AstExpression
 		expression_t.operator = get_operator_for_token(op_token, false) or_return
 		
-		right_child, ok := resolve_expr_primary(iter, no_expr_possible)
+		right_child, ok := resolve_expr_primary(iter, parse_info, no_expr_possible)
 		if !ok {
 			return left_child, false
 		}
@@ -404,9 +416,9 @@ resolve_expr_dot :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible :=
 }
 
 @(private="file")
-resolve_expr_additive :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (left_child: ^AstNode, ok: bool) {
+resolve_expr_additive :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true, parse_info: ^ParseInfo) -> (left_child: ^AstNode, ok: bool) {
 	
-	left_child, ok = resolve_expr_dot(parent, iter, no_expr_possible)
+	left_child, ok = resolve_expr_dot(parent, iter, no_expr_possible, parse_info)
 	if !ok {
 		return left_child, ok
 	}
@@ -419,7 +431,7 @@ resolve_expr_additive :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possib
 		expression_t: AstExpression
 		expression_t.operator = get_operator_for_token(op_token, false) or_return
 		
-		right_child := resolve_expr_dot(nil, iter, no_expr_possible) or_return
+		right_child := resolve_expr_dot(nil, iter, no_expr_possible, parse_info) or_return
 		
 		binary_node := new(AstNode)
 		binary_node.type = .AST_EXPR_BINARY
@@ -435,9 +447,9 @@ resolve_expr_additive :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possib
 }
 
 @(private="file")
-resolve_expr_bit_shift :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (left_child: ^AstNode, ok: bool) {
+resolve_expr_bit_shift :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true, parse_info: ^ParseInfo) -> (left_child: ^AstNode, ok: bool) {
 	
-	left_child, ok = resolve_expr_additive(parent, iter, no_expr_possible)
+	left_child, ok = resolve_expr_additive(parent, iter, no_expr_possible, parse_info)
 	if !ok {
 		return left_child, ok
 	}
@@ -450,7 +462,7 @@ resolve_expr_bit_shift :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possi
 		expression_t: AstExpression
 		expression_t.operator = get_operator_for_token(op_token, false) or_return
 		
-		right_child := resolve_expr_additive(nil, iter, no_expr_possible) or_return
+		right_child := resolve_expr_additive(nil, iter, no_expr_possible, parse_info) or_return
 		
 		binary_node := new(AstNode)
 		binary_node.type = .AST_EXPR_BINARY
@@ -467,9 +479,9 @@ resolve_expr_bit_shift :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possi
 
 
 @(private="file")
-resolve_expr_comparing :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (left_child: ^AstNode, ok: bool) {
+resolve_expr_comparing :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true, parse_info: ^ParseInfo) -> (left_child: ^AstNode, ok: bool) {
 	
-	left_child, ok = resolve_expr_bit_shift(parent, iter, no_expr_possible)
+	left_child, ok = resolve_expr_bit_shift(parent, iter, no_expr_possible, parse_info)
 	if !ok {
 		return left_child, ok
 	}
@@ -486,7 +498,7 @@ resolve_expr_comparing :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possi
 		expression_t: AstExpression
 		expression_t.operator = get_operator_for_token(op_token, false) or_return
 		
-		right_child := resolve_expr_bit_shift(nil, iter, no_expr_possible) or_return
+		right_child := resolve_expr_bit_shift(nil, iter, no_expr_possible, parse_info) or_return
 		
 		binary_node := new(AstNode)
 		binary_node.type = .AST_EXPR_BINARY
@@ -502,9 +514,9 @@ resolve_expr_comparing :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possi
 }
 
 @(private="file")
-resolve_expr_equal :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (left_child: ^AstNode, ok: bool) {
+resolve_expr_equal :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true, parse_info: ^ParseInfo) -> (left_child: ^AstNode, ok: bool) {
 	
-	left_child, ok = resolve_expr_comparing(parent, iter, no_expr_possible)
+	left_child, ok = resolve_expr_comparing(parent, iter, no_expr_possible, parse_info)
 	if !ok {
 		return left_child, ok
 	}
@@ -519,7 +531,7 @@ resolve_expr_equal :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible 
 		expression_t: AstExpression
 		expression_t.operator = get_operator_for_token(op_token, false) or_return
 		
-		right_child := resolve_expr_comparing(nil, iter, no_expr_possible) or_return
+		right_child := resolve_expr_comparing(nil, iter, no_expr_possible, parse_info) or_return
 		
 		binary_node := new(AstNode)
 		binary_node.type = .AST_EXPR_BINARY
@@ -535,9 +547,9 @@ resolve_expr_equal :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible 
 }
 
 @(private="file")
-resolve_expr_bit_xor :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (left_child: ^AstNode, ok: bool) {
+resolve_expr_bit_xor :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true, parse_info: ^ParseInfo) -> (left_child: ^AstNode, ok: bool) {
 	
-	left_child, ok = resolve_expr_equal(parent, iter, no_expr_possible)
+	left_child, ok = resolve_expr_equal(parent, iter, no_expr_possible, parse_info)
 	if !ok {
 		return left_child, ok
 	}
@@ -551,7 +563,7 @@ resolve_expr_bit_xor :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possibl
 		expression_t: AstExpression
 		expression_t.operator = get_operator_for_token(op_token, false) or_return
 		
-		right_child := resolve_expr_equal(nil, iter, no_expr_possible) or_return
+		right_child := resolve_expr_equal(nil, iter, no_expr_possible, parse_info) or_return
 		
 		binary_node := new(AstNode)
 		binary_node.type = .AST_EXPR_BINARY
@@ -567,9 +579,9 @@ resolve_expr_bit_xor :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possibl
 }
 
 @(private="file")
-resolve_expr_bit_and :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (left_child: ^AstNode, ok: bool) {
+resolve_expr_bit_and :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true, parse_info: ^ParseInfo) -> (left_child: ^AstNode, ok: bool) {
 	
-	left_child, ok = resolve_expr_bit_xor(parent, iter, no_expr_possible)
+	left_child, ok = resolve_expr_bit_xor(parent, iter, no_expr_possible, parse_info)
 	if !ok {
 		return left_child, ok
 	}
@@ -583,7 +595,7 @@ resolve_expr_bit_and :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possibl
 		expression_t: AstExpression
 		expression_t.operator = get_operator_for_token(op_token, false) or_return
 		
-		right_child := resolve_expr_bit_xor(nil, iter, no_expr_possible) or_return
+		right_child := resolve_expr_bit_xor(nil, iter, no_expr_possible, parse_info) or_return
 		
 		binary_node := new(AstNode)
 		binary_node.type = .AST_EXPR_BINARY
@@ -599,9 +611,9 @@ resolve_expr_bit_and :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possibl
 }
 
 @(private="file")
-resolve_expr_bit_or :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (left_child: ^AstNode, ok: bool) {
+resolve_expr_bit_or :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true, parse_info: ^ParseInfo) -> (left_child: ^AstNode, ok: bool) {
 	
-	left_child, ok = resolve_expr_bit_and(parent, iter, no_expr_possible)
+	left_child, ok = resolve_expr_bit_and(parent, iter, no_expr_possible, parse_info)
 	if !ok {
 		return left_child, ok
 	}
@@ -615,7 +627,7 @@ resolve_expr_bit_or :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible
 		expression_t: AstExpression
 		expression_t.operator = get_operator_for_token(op_token, false) or_return
 		
-		right_child := resolve_expr_bit_and(nil, iter, no_expr_possible) or_return
+		right_child := resolve_expr_bit_and(nil, iter, no_expr_possible, parse_info) or_return
 		
 		binary_node := new(AstNode)
 		binary_node.type = .AST_EXPR_BINARY
@@ -631,9 +643,9 @@ resolve_expr_bit_or :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible
 }
 
 @(private="file")
-resolve_expr_log_and :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (left_child: ^AstNode, ok: bool) {
+resolve_expr_log_and :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true, parse_info: ^ParseInfo) -> (left_child: ^AstNode, ok: bool) {
 	
-	left_child, ok = resolve_expr_bit_or(parent, iter, no_expr_possible)
+	left_child, ok = resolve_expr_bit_or(parent, iter, no_expr_possible, parse_info)
 	if !ok {
 		return left_child, ok
 	}
@@ -647,7 +659,7 @@ resolve_expr_log_and :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possibl
 		expression_t: AstExpression
 		expression_t.operator = get_operator_for_token(op_token, false) or_return
 		
-		right_child := resolve_expr_bit_or(nil, iter, no_expr_possible) or_return
+		right_child := resolve_expr_bit_or(nil, iter, no_expr_possible, parse_info) or_return
 		
 		binary_node := new(AstNode)
 		binary_node.type = .AST_EXPR_BINARY
@@ -663,9 +675,9 @@ resolve_expr_log_and :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possibl
 }
 
 @(private="file")
-resolve_expr_log_or :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (left_child: ^AstNode, ok: bool) {
+resolve_expr_log_or :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible := true, parse_info: ^ParseInfo) -> (left_child: ^AstNode, ok: bool) {
 	
-	left_child, ok = resolve_expr_log_and(parent, iter, no_expr_possible)
+	left_child, ok = resolve_expr_log_and(parent, iter, no_expr_possible, parse_info)
 	if !ok {
 		return left_child, ok
 	}
@@ -679,7 +691,7 @@ resolve_expr_log_or :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible
 		expression_t: AstExpression
 		expression_t.operator = get_operator_for_token(op_token, false) or_return
 		
-		right_child := resolve_expr_log_and(nil, iter, no_expr_possible) or_return
+		right_child := resolve_expr_log_and(nil, iter, no_expr_possible, parse_info) or_return
 		
 		binary_node := new(AstNode)
 		binary_node.type = .AST_EXPR_BINARY
@@ -695,8 +707,8 @@ resolve_expr_log_or :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible
 }
 
 @(private="package")
-resolve_expr :: proc(root: ^AstNode, iter: ^TokenIter, no_expr_possible := true) -> (^AstNode, bool) {
-	return resolve_expr_log_or(root, iter, no_expr_possible)
+resolve_expr :: proc(root: ^AstNode, iter: ^TokenIter, parse_info: ^ParseInfo, no_expr_possible := true) -> (^AstNode, bool) {
+	return resolve_expr_log_or(root, iter, no_expr_possible, parse_info)
 }
 
 @(private="package")
@@ -737,8 +749,46 @@ token_assignment_operator :: proc(token: Token, op: ^Operator, only_equal_assign
 	return true
 }
 
+resolve_string_literals :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^AstNode, ok: bool) {
+	node = new(AstNode)
+	node.type = .AST_STRING_LITERAL
+
+	if current_token(iter).type != .T_DOUBLE_QUOTE {
+		return node, false
+	}
+	next_token(iter)
+
+	statement_t: AstStatement
+	str_b := strings.builder_make()
+	for current_token(iter).type == .T_STRING_LITERAL {
+		strings.write_string(&str_b, current_token(iter).value)
+		next_token(iter)
+	}
+
+	if current_token(iter).type != .T_DOUBLE_QUOTE {
+		return node, false
+	}
+	next_token(iter)
+
+	statement_t.value      = strings.clone(strings.to_string(str_b))
+	statement_t.identifier = strings.clone(fmt.tprintf("GBL_%d", parse_info.global_count))
+	parse_info.global_count += 1
+
+	node.value = statement_t
+	prepend_ast_node(parse_info.program_node, node)
+
+	node = new(AstNode)
+	node.type = .AST_STRING_LITERAL
+
+	expression_t: AstExpression
+	expression_t.value = statement_t.identifier
+	node.value = expression_t
+
+	return node, true
+}
+
 @(private="package")
-resolving_assignment :: proc(root: ^AstNode, iter: ^TokenIter, only_equal_assign := true) -> bool {
+resolve_assignment :: proc(root: ^AstNode, iter: ^TokenIter, parse_info: ^ParseInfo, only_equal_assign := true) -> bool {
 	statement_t: AstStatement
 	statement_t.identifier = strings.clone(prev_token(iter).value)
 	root.value = statement_t
@@ -750,7 +800,10 @@ resolving_assignment :: proc(root: ^AstNode, iter: ^TokenIter, only_equal_assign
 	}
 
 	next_token(iter)
-	expr_node, ok := resolve_expr(root, iter, no_expr_possible = false)
+
+	ok: bool
+	expr_node: ^AstNode
+	expr_node, ok = resolve_expr(root, iter, parse_info, no_expr_possible = false)
 
 	if !ok {
 		log(.Error, "Could not resolve expression")
@@ -842,7 +895,7 @@ resolve_variable_declaration :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -
 			assignment_node.type = .AST_VAR_ASSIGNMENT
 			append_ast_node(node, assignment_node)
 
-			if parse_info.no_declare_and_assign || !resolving_assignment(assignment_node, iter) {
+			if parse_info.no_declare_and_assign || !resolve_assignment(assignment_node, iter, parse_info) {
 				return node, false
 			}
 		}
@@ -886,7 +939,7 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 	// Return statement
 	if !parsed_stmt && current_token(iter).type == .T_RETURN_KEYWORD {
 		next_token(iter)
-		expr_node, ok := resolve_expr(node, iter)
+		expr_node, ok := resolve_expr(node, iter, parse_info)
 		append_ast_node(node, expr_node)
 
 		if !ok {
@@ -913,7 +966,7 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 			return node, false
 		}
 
-		expr := resolve_expr(node, iter, no_expr_possible = false) or_return
+		expr := resolve_expr(node, iter, parse_info, no_expr_possible = false) or_return
 		append_ast_node(node, expr)
 
 		if_scope := resolve_scope(iter, parse_info, allow_single_stmt = true) or_return
@@ -933,7 +986,7 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 					return node, false
 				}
 
-				expr := resolve_expr(else_if_node, iter, no_expr_possible = false) or_return
+				expr := resolve_expr(else_if_node, iter, parse_info, no_expr_possible = false) or_return
 				append_ast_node(else_if_node, expr)
 
 				else_if_scope := resolve_scope(iter, parse_info, allow_single_stmt = true) or_return
@@ -969,7 +1022,7 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 
 		node.type = .AST_WHILE
 
-		expr := resolve_expr(node, iter, no_expr_possible = false) or_return
+		expr := resolve_expr(node, iter, parse_info, no_expr_possible = false) or_return
 		append_ast_node(node, expr)
 
 		tmp := parse_info.break_possible
@@ -1002,7 +1055,7 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 
 		next_token(iter) // Skip ;
 
-		condition := resolve_expr(node, iter) or_return
+		condition := resolve_expr(node, iter, parse_info) or_return
 		append_ast_node(node, condition)
 
 		next_token(iter) // Skip ;
@@ -1048,12 +1101,12 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 
 		if token_assignment_operator(look_ahead_token(iter)^, nil, only_equal_assign = false) {
 			next_token(iter)
-			if !resolving_assignment(node, iter, only_equal_assign = false) {
+			if !resolve_assignment(node, iter, parse_info, only_equal_assign = false) {
 				return node, false
 			}
 			parsed_stmt = true
 		} else {
-			expr_node, ok := resolve_expr(node, iter)
+			expr_node, ok := resolve_expr(node, iter, parse_info)
 			if ok && expr_node.type != .AST_NOTHING {
 				append_ast_node(node, expr_node)
 				parsed_stmt = true
@@ -1069,7 +1122,7 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 
 	// Standalone expression (Yes see here)
 	if !parsed_stmt {
-		expr_node, ok := resolve_expr(node, iter)
+		expr_node, ok := resolve_expr(node, iter, parse_info)
 		if ok && expr_node.type != .AST_NOTHING {
 			append_ast_node(node, expr_node)
 			parsed_stmt = true
@@ -1218,12 +1271,14 @@ resolve_scope :: proc(iter: ^TokenIter, parse_info: ^ParseInfo, allow_single_stm
 	return scope_node, true
 }
 
-set_default_parse_info :: proc(parse_info: ^ParseInfo) {
+set_default_parse_info :: proc(parse_info: ^ParseInfo, root: ^AstNode) {
 	append(&parse_info.types, DataType{size = 0, name = "void",  is_struct = false, is_float = false})
 	append(&parse_info.types, DataType{size = 1, name = "char",  is_struct = false, is_float = false})
 	append(&parse_info.types, DataType{size = 2, name = "short", is_struct = false, is_float = false})
 	append(&parse_info.types, DataType{size = 4, name = "int",   is_struct = false, is_float = false})
 	append(&parse_info.types, DataType{size = 4, name = "long",  is_struct = false, is_float = false})
+
+	parse_info.program_node = root
 }
 
 @(private="package")
@@ -1236,7 +1291,7 @@ build_ast :: proc(tokens: []Token) -> (bool, ^AstNode) {
 	}
 
 	parse_info: ParseInfo
-	set_default_parse_info(&parse_info)
+	set_default_parse_info(&parse_info, root)
 	// Later this struct will be filled by preprocessor, etc...
 
 	for iter.i < len(iter.tokens) {

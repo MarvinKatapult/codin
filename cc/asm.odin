@@ -39,7 +39,7 @@ Variable :: struct {
 @(private="file")
 append_nasm_header :: proc(str_b: ^strings.Builder) {
 	strings.write_string(str_b, "section .text\n")
-	strings.write_string(str_b, fmt.tprint("\tglobal ", ENTRY_LABEL, "\n\n"))
+	strings.write_string(str_b, fmt.tprint("global ", ENTRY_LABEL, "\n\n"))
 }
 
 @(private="file")
@@ -328,6 +328,11 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 			)
 
 			strings.write_string(str_b, write_str)
+			return true
+		case .AST_STRING_LITERAL:
+			strings.write_string(str_b, "\tmov eax, ")
+			strings.write_string(str_b, expression_t.value)
+			strings.write_string(str_b, "; Moving String in eax\n\n")
 			return true
 		case .AST_EXPR_CONSTANT:
 			if len(expression_node.childs) != 0 {
@@ -660,15 +665,27 @@ collect_metadata_function :: proc(file_info: ^FileInfo, node: ^AstNode, implemen
 generate_for_ast_node :: proc(str_b: ^strings.Builder, node: ^AstNode, file_info: ^FileInfo) -> bool {
 	#partial switch node.type {
 		case .AST_PROGRAM:
+			strings.write_string(str_b, "section .data\n")
 			for child in node.childs {
 				if !generate_for_ast_node(str_b, child, file_info) do return false
 			}
 		case .AST_FUNCTION:
+			strings.write_string(str_b, "\nsection .text\n")
 			if !collect_metadata_function(file_info, node, implementation = true) do return false
 			if !generate_asm_for_function(str_b, node, file_info) do return false
 		case .AST_FUNCTION_DECLARE: 
+			strings.write_string(str_b, "\nsection .text\n")
 			if !collect_metadata_function(file_info, node) do return false
-			strings.write_string(str_b, fmt.tprintf("extern %s; Extern Reference\n\n", node.value.(AstFunction).identifier))
+			strings.write_string(str_b, fmt.tprintf("extern %s; Extern Reference\n", node.value.(AstFunction).identifier))
+		case .AST_STRING_LITERAL:
+			statement_t := node.value.(AstStatement)
+
+			strings.write_string(str_b, statement_t.identifier)
+			strings.write_string(str_b, "\tdb\t")
+			strings.write_string(str_b, "\'")
+			strings.write_string(str_b, statement_t.value)
+			strings.write_string(str_b, "\'")
+			strings.write_string(str_b, ", 0\n")
 	}
 	return true
 }

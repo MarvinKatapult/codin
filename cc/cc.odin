@@ -27,7 +27,6 @@ start_compiling :: proc() {
 	if !parse_args() {
 		os.exit(1)
 	}
-	log(.Debug, fmt.tprint(cc_flags))
 
 	if !compile_file() {
 		os.exit(1)

@@ -56,6 +56,8 @@ TokenType :: enum {
 	T_UNSIGNED,
 	T_SIGNED,
 	T_SINGLE_QUOTE,
+	T_DOUBLE_QUOTE,
+	T_STRING_LITERAL,
 }
 
 @(private="package")
@@ -70,7 +72,7 @@ Token :: struct {
 WHITESPACE :: "\t\n\v\f\r "
 
 @(private="file")
-is_special_symbol :: proc(symbol: rune, is_in_single_quotes: ^bool) -> (bool, TokenType) {
+is_special_symbol :: proc(symbol: rune, is_in_single_quotes: ^bool, is_in_double_quotes: ^bool) -> (bool, TokenType) {
 	switch (symbol) {
 		case '{':
 			return true, TokenType.T_OPEN_BRACE
@@ -113,6 +115,9 @@ is_special_symbol :: proc(symbol: rune, is_in_single_quotes: ^bool) -> (bool, To
 		case '\'':
 			is_in_single_quotes^ = !is_in_single_quotes^
 			return true, TokenType.T_SINGLE_QUOTE
+		case '\"':
+			is_in_double_quotes^ = !is_in_double_quotes^
+			return true, TokenType.T_DOUBLE_QUOTE
 	}
 
 	return false, nil
@@ -206,6 +211,7 @@ lex :: proc(filename: string) -> [dynamic]Token {
 	in_line_comment:     bool = false
 	comment:             bool = false
 	is_in_single_quotes: bool = false
+	is_in_double_quotes: bool = false
 	for c, i in file_str {
 		defer x += 1
 
@@ -216,6 +222,26 @@ lex :: proc(filename: string) -> [dynamic]Token {
 			token.y = y
 			append(&ret, token)
 			continue
+		}
+
+		if is_in_double_quotes {
+			if c == '\"' {
+				is_in_double_quotes = false
+				token.type = .T_STRING_LITERAL
+				token.value = strings.clone(strings.to_string(str_b))
+				strings.builder_reset(&str_b)
+				token.x = x
+				token.y = y
+				append(&ret, token)
+
+				token.type = .T_DOUBLE_QUOTE
+				token.value = "\""
+				append(&ret, token)
+				continue
+			} else {
+				strings.write_rune(&str_b, c)
+				continue
+			}
 		}
 
 		last_token := i == len(file_str) - 1
@@ -250,7 +276,7 @@ lex :: proc(filename: string) -> [dynamic]Token {
 		if in_line_comment || comment do continue
 
 		is_space := strings.is_space(c)
-		special_symbol, type := is_special_symbol(c, &is_in_single_quotes)
+		special_symbol, type := is_special_symbol(c, &is_in_single_quotes, &is_in_double_quotes)
 
 		if c == '=' && i != 0 {
 			last_token := &ret[len(ret)-1]
