@@ -2,15 +2,16 @@
 - Function should have to have return statement
 
 # 1
-- Post and Prefix Operator
 - do-while-loop
-- \n \t ... 
 - Assignments as standalone expressions
 
+- \n \t ... in string literals
+- variadic arguments
+- Typechecking (?)
+
 # 2
-- Datatypes
+- Post and Prefix Operator
 - typedef
 - Preprocessor
 - Structs
 - Unions
-- Pointer
