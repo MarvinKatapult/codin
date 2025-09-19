@@ -777,7 +777,7 @@ resolve_string_literals :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (no
 	next_token(iter)
 
 	statement_t.value      = strings.clone(strings.to_string(str_b))
-	statement_t.identifier = strings.clone(fmt.tprintf("GBL_%d", parse_info.global_count))
+	statement_t.identifier = strings.clone(fmt.tprintf("GLB_STR_%d", parse_info.global_count))
 	parse_info.global_count += 1
 
 	node.value = statement_t

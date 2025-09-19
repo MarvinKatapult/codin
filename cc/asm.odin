@@ -419,7 +419,9 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 				return false
 			}
 
-			if len(func_data.params) != len(expression_node.childs) && !func_data.params[len(func_data.params)-1].variadic {
+			log(.Debug, fmt.tprint(func_data.params[len(func_data.params)-1].variadic, len(func_data.params), len(expression_node.childs)))
+			if len(func_data.params) != len(expression_node.childs) && 
+			   !(func_data.params[len(func_data.params)-1].variadic && len(func_data.params) - 1 <= len(expression_node.childs)) {
 				log(.Error, fmt.tprintf("Call to function %s mismatching parameter count", func_identifier))
 				return false
 			}
