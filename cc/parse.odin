@@ -226,6 +226,7 @@ is_token_unary_operator :: proc(token: ^Token) -> bool {
 	return false
 }
 
+@(private="file")
 valid_single_quote_tokens :: proc(iter: ^TokenIter, val: ^u8) -> bool {
 
 	token := current_token(iter).value
@@ -255,6 +256,7 @@ valid_single_quote_tokens :: proc(iter: ^TokenIter, val: ^u8) -> bool {
 	return true
 }
 
+@(private="file")
 get_integer_literal_value :: proc(iter: ^TokenIter) -> (val: string , ok: bool) {
 	if current_token(iter).type == .T_SINGLE_QUOTE {
 		next_token(iter)
@@ -750,6 +752,7 @@ token_assignment_operator :: proc(token: Token, op: ^Operator, only_equal_assign
 	return true
 }
 
+@(private="file")
 resolve_string_literals :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^AstNode, ok: bool) {
 	node = new(AstNode)
 	node.type = .AST_STRING_LITERAL
@@ -1321,6 +1324,7 @@ resolve_scope :: proc(iter: ^TokenIter, parse_info: ^ParseInfo, allow_single_stm
 	return scope_node, true
 }
 
+@(private="file")
 set_default_parse_info :: proc(parse_info: ^ParseInfo, root: ^AstNode) {
 	append(&parse_info.types, DataType{size = 0, name = "void",  is_struct = false, is_float = false})
 	append(&parse_info.types, DataType{size = 1, name = "char",  is_struct = false, is_float = false})

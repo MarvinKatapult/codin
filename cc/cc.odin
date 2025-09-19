@@ -3,11 +3,13 @@ package cc
 import "core:fmt"
 import "core:os"
 
+@(private)
 CompileFlags :: struct {
 	is_object: bool,
 	output_file: string,
 	input_file: string,
 }
+@(private)
 cc_flags: CompileFlags = {
 	is_object = false,
 	output_file = "a.out",
@@ -33,6 +35,7 @@ start_compiling :: proc() {
 	}
 }
 
+@(private)
 parse_args :: proc() -> bool {
 	skip: bool
 	for arg, i in os.args {
