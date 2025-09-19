@@ -17,6 +17,7 @@ NodeType :: enum {
 	AST_VAR_DECLARE,
 	AST_VAR_ASSIGNMENT,
 	AST_VAR_DEREF_ASSIGNMENT,
+	AST_VARIADIC_ARGS,
 	AST_EXPR_STATEMENT,
 	AST_EXPR_CONSTANT,
 	AST_EXPR_UNARY,
@@ -113,6 +114,7 @@ DataType :: struct {
 	is_float:  bool,
 	unsigned:  bool,
 	is_struct: bool,
+	variadic: bool,
 }
 
 @(private="package")
@@ -1250,6 +1252,21 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter, parse_info: ^ParseInf
 		}
 
 		first_parameter = false
+
+		if current_token(iter).type == .T_VARIADIC_ARGS {
+			next_token(iter)
+
+			var_args_node := new (AstNode)
+			var_args_node.type = .AST_VARIADIC_ARGS
+			append_ast_node(node, var_args_node)
+
+			if current_token(iter).type != .T_CLOSE_PARANTHESIS {
+				log_error_with_token(current_token(iter)^, "No args allowed after variadic arguments: ...")
+				return node, false
+			}
+
+			break
+		}
 
 		parse_info.no_declare_and_assign = true
 		declaration: ^AstNode

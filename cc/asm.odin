@@ -419,7 +419,7 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 				return false
 			}
 
-			if len(func_data.params) != len(expression_node.childs) {
+			if len(func_data.params) != len(expression_node.childs) && !func_data.params[len(func_data.params)-1].variadic {
 				log(.Error, fmt.tprintf("Call to function %s mismatching parameter count", func_identifier))
 				return false
 			}
@@ -677,6 +677,9 @@ collect_metadata_function :: proc(file_info: ^FileInfo, node: ^AstNode, implemen
 	function_info.identifier = function_t.identifier
 	function_info.return_type = function_t.ret_type
 	for parameter in node.childs {
+		if parameter.type == .AST_VARIADIC_ARGS {
+			append(&function_info.params, DataType {variadic = true})
+		}
 		if parameter.type != .AST_VAR_DECLARE do break
 
 		statement_t := parameter.value.(AstStatement)

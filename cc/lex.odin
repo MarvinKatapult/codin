@@ -58,6 +58,7 @@ TokenType :: enum {
 	T_SINGLE_QUOTE,
 	T_DOUBLE_QUOTE,
 	T_STRING_LITERAL,
+	T_VARIADIC_ARGS,
 }
 
 @(private="package")
@@ -144,6 +145,8 @@ is_keyword :: proc(s: string) -> (bool, TokenType) {
 			return true, TokenType.T_SIGNED
 		case "do":
 			return true, TokenType.T_DO
+		case "...":
+			return true, TokenType.T_VARIADIC_ARGS
 	}
 	return false, TokenType.T_IDENTIFIER
 }
