@@ -11,7 +11,7 @@ Unfinished C-Compiler written in Odin
 
 ## Highest level code supported by compiler
 ```c
-void printf(int str, int a, int b);
+void printf(int str, ...);
 
 int main(void) {
 
@@ -25,11 +25,10 @@ int main(void) {
 ```text
 [AST_PROGRAM]
     [AST_STRING_LITERAL] GBL_0 This is a cool number: %d%c
-    [AST_FUNCTION_DECLARE] printf DataType{name = "void", size = 0, is_float = false, unsigned = false, is_struct = false}
+    [AST_FUNCTION_DECLARE] printf DataType{name = "void", size = 0, is_float = false, unsigned = false, is_struct = false, variadic = false}
         [AST_VAR_DECLARE] str
-        [AST_VAR_DECLARE] a
-        [AST_VAR_DECLARE] b
-    [AST_FUNCTION] main DataType{name = "int", size = 4, is_float = false, unsigned = false, is_struct = false}
+        [AST_VARIADIC_ARGS]
+    [AST_FUNCTION] main DataType{name = "int", size = 4, is_float = false, unsigned = false, is_struct = false, variadic = false}
         [AST_SCOPE] Parent: AST_FUNCTION
             [AST_EXPR_STATEMENT]
                 [AST_FUNC_CALL] printf OP Parent: AST_EXPR_STATEMENT
