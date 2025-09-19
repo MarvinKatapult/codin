@@ -15,6 +15,7 @@ TokenType :: enum {
 	T_RETURN_KEYWORD,
 	T_IF,
 	T_ELSE,
+	T_DO,
 	T_WHILE,
 	T_FOR,
 	T_IDENTIFIER,
@@ -141,6 +142,8 @@ is_keyword :: proc(s: string) -> (bool, TokenType) {
 			return true, TokenType.T_UNSIGNED
 		case "signed":
 			return true, TokenType.T_SIGNED
+		case "do":
+			return true, TokenType.T_DO
 	}
 	return false, TokenType.T_IDENTIFIER
 }

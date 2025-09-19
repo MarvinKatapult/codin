@@ -27,6 +27,7 @@ NodeType :: enum {
 	AST_ELSE,
 	AST_ELSE_IF,
 	AST_WHILE,
+	AST_DO_WHILE,
 	AST_FOR,
 	AST_BREAK,
 	AST_STRING_LITERAL,
@@ -1033,6 +1034,49 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 
 		while_scope := resolve_scope(iter, parse_info, allow_single_stmt = true) or_return
 		append_ast_node(node, while_scope)
+
+		return node, ok
+	}
+
+	if !parsed_stmt && current_token(iter).type == .T_DO {
+		parsed_stmt = true
+		node.type = .AST_DO_WHILE
+
+		next_token(iter)
+
+		tmp := parse_info.break_possible
+		parse_info.break_possible = true
+		defer parse_info.break_possible = tmp
+
+		while_scope := resolve_scope(iter, parse_info, allow_single_stmt = true) or_return
+		append_ast_node(node, while_scope)
+
+		if current_token(iter).type != .T_CLOSE_BRACE {
+			log_error_with_token(current_token(iter)^, "Expected } at end of scope")
+			return node, false
+		}
+
+		next_token(iter)
+
+		if current_token(iter).type != .T_WHILE {
+			log_error_with_token(current_token(iter)^, "Expected while after do-scope")
+			return node, false
+		}
+
+		next_token(iter)
+
+		if current_token(iter).type != .T_OPEN_PARANTHESIS {
+			log_error_with_token(current_token(iter)^, "while-loop condition has to be wrapped in (...)")
+			return node, false
+		}
+
+		expr := resolve_expr(node, iter, parse_info, no_expr_possible = false) or_return
+		append_ast_node(node, expr)
+
+		if current_token(iter).type != .T_SEMICOLON {
+			log_error_with_token(current_token(iter)^, "Expected ; after do-while-loop")
+			return node, false
+		}
 
 		return node, ok
 	}

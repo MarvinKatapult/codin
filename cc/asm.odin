@@ -133,6 +133,39 @@ generate_asm_for_while :: proc(str_b: ^strings.Builder, statement_node: ^AstNode
 }
 
 @(private="file")
+generate_asm_for_do_while :: proc(str_b: ^strings.Builder, statement_node: ^AstNode,
+							   func_scope: ^FunctionScope, file_info: ^FileInfo) -> bool {
+	assert(len(statement_node.childs) == 2)
+
+	scope_node     := statement_node.childs[0]
+	condition_node := statement_node.childs[1]
+
+	strings.write_string(str_b, "\t")
+	before_condition := write_label(str_b, func_scope, advance = true)
+	strings.write_string(str_b, ":\t; begin of do-while\n\n")
+
+	old_label := func_scope.break_label
+
+	after_while := strings.clone(fmt.tprintf(".L%d", func_scope.label_count^))
+	func_scope.label_count^ += 1
+
+	func_scope.break_label = after_while
+	generate_asm_for_scope(str_b, scope_node, func_scope, file_info) or_return
+	func_scope.break_label = old_label
+
+	generate_asm_for_expr(str_b, condition_node, func_scope, file_info) or_return
+	strings.write_string(str_b, "\tcmp eax, 0\t; Check if condition is false\n")
+	strings.write_string(str_b, "\tje ")
+	strings.write_string(str_b, after_while)
+	strings.write_string(str_b, "\t\t; Jump to end of while\n\n")
+
+	strings.write_string(str_b, fmt.tprintf("\tjmp .L%d\t\t; Jump to begin of while\n", before_condition))
+	strings.write_string(str_b, fmt.tprintf("\t%s:\t\t; End of while\n\n", after_while))
+
+	return true
+}
+
+@(private="file")
 generate_asm_for_for :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
 							 func_scope: ^FunctionScope, file_info: ^FileInfo) -> bool {
 
@@ -532,6 +565,8 @@ generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^Ast
 			generate_asm_for_if(str_b, statement_node, func_scope, file_info) or_return
 		case .AST_WHILE:
 			generate_asm_for_while(str_b, statement_node, func_scope, file_info) or_return
+		case .AST_DO_WHILE:
+			generate_asm_for_do_while(str_b, statement_node, func_scope, file_info) or_return
 		case .AST_FOR:
 			generate_asm_for_for(str_b, statement_node, func_scope, file_info) or_return
 		case .AST_BREAK:
