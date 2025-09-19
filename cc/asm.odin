@@ -3,7 +3,6 @@ package cc
 import "core:strings"
 import "core:fmt"
 import "core:os/os2"
-import "core:sys/linux/"
 
 @(private="file")
 PTR_SIZE :: 4
@@ -79,7 +78,7 @@ generate_asm_for_if :: proc(str_b: ^strings.Builder, if_node: ^AstNode,
 			if !generate_asm_for_expr(str_b, else_or_else_if.childs[0], func_scope, file_info) do return false
 			strings.write_string(str_b, "\tcmp eax, 0\t; ELSE-IF Check if condition is false\n")
 			strings.write_string(str_b, "\tje ")
-			potential_else := write_label(str_b, func_scope, advance = true)
+			potential_else = write_label(str_b, func_scope, advance = true)
 			strings.write_string(str_b, "\t\t; Jump over scope if condition is false\n")
 
 			generate_asm_for_scope(str_b, else_or_else_if.childs[1], func_scope, file_info) or_return
@@ -372,7 +371,7 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 			return generate_asm_for_operator(str_b, expression_node, func_scope)
 		case .AST_FUNC_CALL:
 
-			expression_t := expression_node.value.(AstExpression)
+			expression_t = expression_node.value.(AstExpression)
 			func_identifier := expression_t.value
 			
 			if func_identifier not_in file_info.callables {
@@ -394,7 +393,7 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 
 			// Put parameters for call on stack
 			original_ebp_offset := func_scope.ebp_offset^
-			#reverse for child, i in expression_node.childs {
+			#reverse for child in expression_node.childs {
 				generate_asm_for_expr(str_b, child, func_scope, file_info) or_return
 
 				strings.write_string(str_b, 
@@ -483,7 +482,6 @@ size_keyword_for_type :: proc(type: DataType) -> string {
 @(private="file")
 generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
 								   func_scope: ^FunctionScope, file_info: ^FileInfo) -> bool {
-	statement_t := statement_node.value.(AstStatement)
 
 	#partial switch statement_node.type {
 		case .AST_RETURN_STATEMENT: fallthrough
@@ -611,8 +609,6 @@ generate_asm_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNo
 		ebp_offset = new(int),
 		label = function_label
 	}
-
-	ebp_offset: int = 0
 
 	parameter_ebp_offset: int = PTR_SIZE
 	for child in function_node.childs {

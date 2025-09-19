@@ -3,7 +3,6 @@ package cc
 import "core:os"
 import "core:fmt"
 import "core:strings"
-import "core:strconv"
 
 @(private="package")
 NodeType :: enum {
@@ -397,7 +396,8 @@ resolve_expr_dot :: proc(parent: ^AstNode, iter: ^TokenIter, no_expr_possible :=
 		expression_t: AstExpression
 		expression_t.operator = get_operator_for_token(op_token, false) or_return
 		
-		right_child, ok := resolve_expr_primary(iter, parse_info, no_expr_possible)
+		right_child: ^AstNode
+		right_child, ok = resolve_expr_primary(iter, parse_info, no_expr_possible)
 		if !ok {
 			return left_child, false
 		}
@@ -939,7 +939,9 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 	// Return statement
 	if !parsed_stmt && current_token(iter).type == .T_RETURN_KEYWORD {
 		next_token(iter)
-		expr_node, ok := resolve_expr(node, iter, parse_info)
+
+		expr_node: ^AstNode
+		expr_node, ok = resolve_expr(node, iter, parse_info)
 		append_ast_node(node, expr_node)
 
 		if !ok {
@@ -986,7 +988,7 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 					return node, false
 				}
 
-				expr := resolve_expr(else_if_node, iter, parse_info, no_expr_possible = false) or_return
+				expr = resolve_expr(else_if_node, iter, parse_info, no_expr_possible = false) or_return
 				append_ast_node(else_if_node, expr)
 
 				else_if_scope := resolve_scope(iter, parse_info, allow_single_stmt = true) or_return
@@ -1106,7 +1108,8 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 			}
 			parsed_stmt = true
 		} else {
-			expr_node, ok := resolve_expr(node, iter, parse_info)
+			expr_node: ^AstNode
+			expr_node, ok = resolve_expr(node, iter, parse_info)
 			if ok && expr_node.type != .AST_NOTHING {
 				append_ast_node(node, expr_node)
 				parsed_stmt = true
@@ -1122,7 +1125,8 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 
 	// Standalone expression (Yes see here)
 	if !parsed_stmt {
-		expr_node, ok := resolve_expr(node, iter, parse_info)
+		expr_node: ^AstNode
+		expr_node, ok = resolve_expr(node, iter, parse_info)
 		if ok && expr_node.type != .AST_NOTHING {
 			append_ast_node(node, expr_node)
 			parsed_stmt = true
@@ -1201,7 +1205,8 @@ resolve_function :: proc(root: ^AstNode, iter: ^TokenIter, parse_info: ^ParseInf
 		first_parameter = false
 
 		parse_info.no_declare_and_assign = true
-		declaration, ok := resolve_variable_declaration(iter, parse_info)
+		declaration: ^AstNode
+		declaration, ok = resolve_variable_declaration(iter, parse_info)
 		parse_info.no_declare_and_assign = false
 		if !ok {
 			log_error_with_token(current_token(iter)^, "Failed to parse type declaration as parameter")
@@ -1256,7 +1261,8 @@ resolve_scope :: proc(iter: ^TokenIter, parse_info: ^ParseInfo, allow_single_stm
 
 	// int foo(void) {...}
 	for current_token(iter).type != .T_CLOSE_BRACE {
-		statement_node, ok := resolve_statement(iter, parse_info)
+		statement_node: ^AstNode
+		statement_node, ok = resolve_statement(iter, parse_info)
 		append_ast_node(scope_node, statement_node)
 
 		if !ok {

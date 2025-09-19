@@ -4,7 +4,6 @@ import "core:os"
 import "core:strings"
 import "core:strconv"
 import "core:unicode/utf8"
-import "core:fmt"
 
 @(private="package")
 TokenType :: enum {
@@ -150,7 +149,7 @@ is_keyword :: proc(s: string) -> (bool, TokenType) {
 check_for_keyword :: proc(s: string, tokens: ^[dynamic]Token, x: u32, y: u32) -> bool {
 	if (len(strings.trim(s, WHITESPACE)) > 0) {
 		token: Token
-		is_keyword, type := is_keyword(s)
+		_, type := is_keyword(s)
 
 		token.value = strings.clone_from(s)
 		token.type = type
@@ -180,13 +179,11 @@ check_for_int_literal :: proc(s: string, tokens: ^[dynamic]Token, x: u32, y: u32
 
 @(private="file")
 look_ahead_one :: proc(buf: string, index: int, c1: u8, c2: u8) -> bool {
-	c := buf[index]
 	return (len(buf) >= index && buf[index] == c1 && buf[index + 1] == c2)
 }
 
 @(private="file")
 look_back_one :: proc(buf: string, index: int, c1: u8, c2: u8) -> bool {
-	c := buf[index]
 	return (index > 0 && buf[index - 1] == c1 && buf[index] == c2)
 }
 
