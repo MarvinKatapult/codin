@@ -32,6 +32,7 @@ NodeType :: enum {
 	AST_FOR,
 	AST_BREAK,
 	AST_STRING_LITERAL,
+	AST_STRUCT_DECLARE,
 }
 
 @(private="package")
@@ -912,6 +913,75 @@ resolve_variable_declaration :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -
 	return node, ok
 }
 
+calc_size_of_struct :: proc(node: ^AstNode) -> (size: int) {
+	for child in node.childs {
+		statement_t := child.value.(AstStatement)
+		size += statement_t.type.size
+	}
+	return size
+}
+
+resolve_struct_declaration :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^AstNode, ok: bool) {
+
+	node = new(AstNode)
+
+	if current_token(iter).type != .T_STRUCT {
+		return node, false
+	}
+
+	next_token(iter)
+
+	if current_token(iter).type != .T_IDENTIFIER {
+		return node, false
+	}
+
+	statement_t: AstStatement
+	statement_t.identifier = strings.clone(current_token(iter).value)
+
+	node.type = .AST_STRUCT_DECLARE
+	node.value = statement_t
+	next_token(iter)
+
+	if current_token(iter).type != .T_OPEN_BRACE {
+		return node, false
+	}
+
+	next_token(iter)
+
+	for current_token(iter).type != .T_CLOSE_BRACE {
+
+		parse_info.no_declare_and_assign = true
+		declaration: ^AstNode
+		declaration, ok = resolve_variable_declaration(iter, parse_info)
+		parse_info.no_declare_and_assign = false
+
+		append_ast_node(node, declaration)
+
+		if current_token(iter).type != .T_SEMICOLON {
+			log_error_with_token(current_token(iter)^, "Expected ; or end of struct declaration")
+			return node, false
+		}
+
+		next_token(iter)
+	}
+
+	append(&parse_info.types, DataType{
+		size = calc_size_of_struct(node),
+		name = statement_t.identifier,
+		is_struct = true,
+		is_float = false
+	})
+
+	if len(node.childs) <= 0 {
+		log_error_with_token(current_token(iter)^, "Struct declaration with no fields is not allowed")
+		return node, false
+	}
+
+	next_token(iter)
+
+	return node, ok
+}
+
 @(private="package")
 resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^AstNode, ok: bool) {
 
@@ -961,6 +1031,10 @@ resolve_statement :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> (node: ^A
 
 	if !parsed_stmt {
 		node, parsed_stmt = resolve_variable_declaration(iter, parse_info)
+	}
+
+	if !parsed_stmt {
+		node, parsed_stmt = resolve_struct_declaration(iter, parse_info)
 	}
 
 	// if-statement
