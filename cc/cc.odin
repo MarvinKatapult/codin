@@ -88,14 +88,14 @@ compile_file :: proc() -> bool {
 	}
 
 	log(.Proto, "Building AST for file: ", cc_flags.input_file)
-	ok, ast := build_ast(tokens[:])
+	ok, ast, parse_info := build_ast(tokens[:])
 	log_ast(ast)
 	if !ok {
 		log(.Error, "Building AST was not successful")
 		return false
 	}
 
-	assembler := generate_asm(ast)
+	assembler := generate_asm(ast, parse_info)
 	if assembler == "" {
 		log(.Error, "Generating Assembly was not successful")
 		return false

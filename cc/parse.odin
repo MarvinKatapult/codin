@@ -115,7 +115,8 @@ DataType :: struct {
 	is_float:  bool,
 	unsigned:  bool,
 	is_struct: bool,
-	variadic: bool,
+	variadic:  bool,
+	subtypes:  [dynamic]DataType,
 }
 
 @(private="package")
@@ -948,12 +949,22 @@ resolve_struct_declaration :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> 
 
 	next_token(iter)
 
+	new_type := DataType {
+		is_struct = true,
+		name = statement_t.identifier
+	}
+
 	for current_token(iter).type != .T_CLOSE_BRACE {
 
 		parse_info.no_declare_and_assign = true
 		declaration: ^AstNode
 		declaration, ok = resolve_variable_declaration(iter, parse_info)
+		if !ok do break
 		parse_info.no_declare_and_assign = false
+
+		parsed_type := declaration.value.(AstStatement).type
+		new_type.size += parsed_type.size
+		append(&new_type.subtypes, parsed_type)
 
 		append_ast_node(node, declaration)
 
@@ -965,12 +976,7 @@ resolve_struct_declaration :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> 
 		next_token(iter)
 	}
 
-	append(&parse_info.types, DataType{
-		size = calc_size_of_struct(node),
-		name = statement_t.identifier,
-		is_struct = true,
-		is_float = false
-	})
+	append(&parse_info.types, new_type)
 
 	if len(node.childs) <= 0 {
 		log_error_with_token(current_token(iter)^, "Struct declaration with no fields is not allowed")
@@ -1427,7 +1433,7 @@ set_default_parse_info :: proc(parse_info: ^ParseInfo, root: ^AstNode) {
 }
 
 @(private="package")
-build_ast :: proc(tokens: []Token) -> (bool, ^AstNode) {
+build_ast :: proc(tokens: []Token) -> (bool, ^AstNode, ^ParseInfo) {
 	root := new(AstNode)
 	root.type = .AST_PROGRAM
 
@@ -1435,21 +1441,21 @@ build_ast :: proc(tokens: []Token) -> (bool, ^AstNode) {
 		tokens = tokens
 	}
 
-	parse_info: ParseInfo
-	set_default_parse_info(&parse_info, root)
+	parse_info := new(ParseInfo)
+	set_default_parse_info(parse_info, root)
 	// Later this struct will be filled by preprocessor, etc...
 
 	for iter.i < len(iter.tokens) {
-		node, ok := resolve_function(root, &iter, &parse_info)
+		node, ok := resolve_function(root, &iter, parse_info)
 		append(&parse_info.functions, node.value.(AstFunction))
 		append_ast_node(root, node)
 
 		if !ok {
 			log(.Error, "Could not resolve function: Aborting")
-			return false, root
+			return false, root, parse_info
 		}
 		next_token(&iter, fail = false)
 	}
 
-	return true, root
+	return true, root, parse_info
 }

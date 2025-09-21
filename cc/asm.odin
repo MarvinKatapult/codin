@@ -18,7 +18,8 @@ FunctionInfo :: struct {
 
 @(private="file")
 FileInfo :: struct {
-	callables: map[string]FunctionInfo
+	callables: map[string]FunctionInfo,
+	parse_info: ^ParseInfo,
 }
 
 @(private="file")
@@ -420,7 +421,6 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 				return false
 			}
 
-			log(.Debug, fmt.tprint(func_data.params[len(func_data.params)-1].variadic, len(func_data.params), len(expression_node.childs)))
 			if len(func_data.params) != len(expression_node.childs) && 
 			   !(func_data.params[len(func_data.params)-1].variadic && len(func_data.params) - 1 <= len(expression_node.childs)) {
 				log(.Error, fmt.tprintf("Call to function %s mismatching parameter count", func_identifier))
@@ -518,12 +518,15 @@ size_keyword_for_type :: proc(type: DataType) -> string {
 generate_asm_for_struct_declare :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
 		func_scope: ^FunctionScope, file_info: ^FileInfo) -> bool {
 	
-	log(.Debug, fmt.tprint(statement_node.childs))
+	for type in file_info.parse_info.types {
+		log(.Debug, fmt.tprint(type))
+		for subtype in type.subtypes {
+			log(.Debug, fmt.tprint("Subtype", subtype))
+		}
+	}
 
 //	variable := Variable{type = statement_t.type, ebp_offset = strings.clone(fmt.tprintf("[ebp%d]", ebp_offset^))}
 //	func_scope.variables[statement_t.identifier] = variable
-
-	
 	
 	assert(false)
 
@@ -746,11 +749,12 @@ generate_for_ast_node :: proc(str_b: ^strings.Builder, node: ^AstNode, file_info
 }
 
 @(private="package")
-generate_asm :: proc(ast: ^AstNode) -> string {
+generate_asm :: proc(ast: ^AstNode, parse_info: ^ParseInfo) -> string {
 	str_b := strings.builder_make()
 	defer strings.builder_destroy(&str_b)
 
 	file_info: FileInfo
+	file_info.parse_info = parse_info
 
 	append_nasm_header(&str_b)
 	if !generate_for_ast_node(&str_b, ast, &file_info) do return ""
