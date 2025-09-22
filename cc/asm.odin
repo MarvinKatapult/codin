@@ -2,6 +2,7 @@ package cc
 
 import "core:strings"
 import "core:fmt"
+import "core:strconv"
 import "core:os/os2"
 
 @(private="file")
@@ -699,6 +700,30 @@ collect_metadata_function :: proc(file_info: ^FileInfo, node: ^AstNode, implemen
     return true
 }
 
+generate_asm_for_string_definition :: proc(str_b: ^strings.Builder, literal: string) {
+
+    skip_one := false
+    strings.write_string(str_b, "\'")
+    for c, i in literal {
+        if skip_one {
+            skip_one = false
+            continue
+        }
+
+        to_write: string
+        if c == '\\' && i + 1 < len(literal) {
+            next_char := literal[i+1]
+            val, _ := get_terminated_char_value(next_char)
+            strings.write_string(str_b, fmt.tprintf("\', %d, \'", val))
+            skip_one = true
+            continue
+        }
+            
+        strings.write_rune(str_b, c)
+    }
+    strings.write_string(str_b, "\'")
+}
+
 @(private="file")
 generate_for_ast_node :: proc(str_b: ^strings.Builder, node: ^AstNode, file_info: ^FileInfo) -> bool {
     #partial switch node.type {
@@ -720,9 +745,7 @@ generate_for_ast_node :: proc(str_b: ^strings.Builder, node: ^AstNode, file_info
 
             strings.write_string(str_b, statement_t.identifier)
             strings.write_string(str_b, "\tdb\t")
-            strings.write_string(str_b, "\'")
-            strings.write_string(str_b, statement_t.value)
-            strings.write_string(str_b, "\'")
+            generate_asm_for_string_definition(str_b, statement_t.value)
             strings.write_string(str_b, ", 0\n")
     }
     return true

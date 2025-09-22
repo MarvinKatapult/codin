@@ -230,6 +230,29 @@ is_token_unary_operator :: proc(token: ^Token) -> bool {
     return false
 }
 
+@(private="package")
+get_terminated_char_value :: proc(c: u8) -> (val: u8, ok: bool) {
+    switch c {
+        case 'n':
+            return '\n', true
+        case 't':
+            return '\t', true
+        case '\"':
+            return '\"', true
+        case '\'':
+            return '\'', true
+        case '\\':
+            return '\\', true
+        case '\r':
+            return '\r', true
+        case '\v':
+            return '\v', true
+        case '0':
+            return 0, true
+    }
+    return 0, false
+}
+
 @(private="file")
 valid_single_quote_tokens :: proc(iter: ^TokenIter, val: ^u8) -> bool {
 
@@ -241,19 +264,10 @@ valid_single_quote_tokens :: proc(iter: ^TokenIter, val: ^u8) -> bool {
         terminated_char := current_token(iter).value
         if len(terminated_char) != 1 do return false
 
-        switch terminated_char[0] {
-            case 'n':
-                val^ = '\n'
-                return true
-            case 't':
-                val^ = '\t'
-                return true
-            case '0':
-                val^ = 0
-                return true
-        }
+        ok: bool
+        val^, ok = get_terminated_char_value(terminated_char[0])
 
-        return false
+        return ok
     }
 
     val^ = current_token(iter).value[0]

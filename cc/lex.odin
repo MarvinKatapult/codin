@@ -149,8 +149,6 @@ is_keyword :: proc(s: string) -> (bool, TokenType) {
             return true, TokenType.T_SIGNED
         case "do":
             return true, TokenType.T_DO
-        case "...":
-            return true, TokenType.T_VARIADIC_ARGS
         case "struct":
             return true, TokenType.T_STRUCT
     }
@@ -389,6 +387,17 @@ lex :: proc(filename: string) -> [dynamic]Token {
                 last_token.type = .T_LOGICAL_AND
                 delete(last_token.value)
                 last_token.value = "&&"
+                continue;
+            }
+        }
+
+        if c == '.' && i > 1 {
+            last_token := &ret[len(ret)-1]
+            last_last_token := &ret[len(ret)-2]
+            if last_token.type == .T_DOT && last_last_token.type == .T_DOT {
+                last_last_token.type = .T_VARIADIC_ARGS
+                last_last_token.value = "..."
+                ordered_remove(&ret, len(ret)-1)
                 continue;
             }
         }
