@@ -34,24 +34,24 @@ LogType :: enum {
 
 @(private="package")
 log :: proc(type: LogType, msg: ..string, cc_prefix: bool = true, place := #caller_location) {
-	prefix_str := cc_prefix ? "[cc]" : ""
+    prefix_str := cc_prefix ? "[cc]" : ""
     switch type {
         case .Error:
             fmt.eprintf("%s%s%s%s (%s)", RED, UNDERLINE, prefix_str, cc_prefix ? "[E]" : "", place)
-			fmt.print(RESET)
-			fmt.print(" ")
+            fmt.print(RESET)
+            fmt.print(" ")
         case .Debug:
             fmt.printf("%s%s%s", BLUE, prefix_str, cc_prefix ? "[D] " : "")
-			fmt.print(RESET)
+            fmt.print(RESET)
         case .Proto:
             fmt.printf("%s%s%s", YELLOW, prefix_str, cc_prefix ? "[P] " : "")
-			fmt.print(RESET)
+            fmt.print(RESET)
     }
 
     for s in msg {
         fmt.print(s)
     }
-	fmt.println()
+    fmt.println()
 }
 
 @(private="package")
