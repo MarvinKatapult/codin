@@ -515,25 +515,6 @@ size_keyword_for_type :: proc(type: DataType) -> string {
 	return "";
 }
 
-generate_asm_for_struct_declare :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
-		func_scope: ^FunctionScope, file_info: ^FileInfo) -> bool {
-	
-	for type in file_info.parse_info.types {
-		log(.Debug, fmt.tprint(type))
-		for subtype in type.subtypes {
-			log(.Debug, fmt.tprint("Subtype", subtype))
-		}
-	}
-
-//	variable := Variable{type = statement_t.type, ebp_offset = strings.clone(fmt.tprintf("[ebp%d]", ebp_offset^))}
-//	func_scope.variables[statement_t.identifier] = variable
-	
-	assert(false)
-
-	return false
-
-}
-
 @(private="file")
 generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
 								   func_scope: ^FunctionScope, file_info: ^FileInfo) -> bool {
@@ -596,7 +577,6 @@ generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^Ast
 			strings.write_string(str_b, func_scope.break_label)
 			strings.write_string(str_b, "\t; Break\n\n")
 		case .AST_STRUCT_DECLARE:
-			generate_asm_for_struct_declare(str_b, statement_node, func_scope, file_info) or_return
 	}
 
 	return true

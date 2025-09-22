@@ -53,6 +53,7 @@ TokenType :: enum {
 	T_SHIFT_RIGHT,
 	T_BREAK,
 	T_COMMA,
+	T_DOT,
 	T_UNSIGNED,
 	T_SIGNED,
 	T_SINGLE_QUOTE,
@@ -114,6 +115,8 @@ is_special_symbol :: proc(symbol: rune, is_in_single_quotes: ^bool, is_in_double
 			return true, TokenType.T_BIT_XOR
 		case ',':
 			return true, TokenType.T_COMMA
+		case '.':
+			return true, TokenType.T_DOT
 		case '\'':
 			is_in_single_quotes^ = !is_in_single_quotes^
 			return true, TokenType.T_SINGLE_QUOTE

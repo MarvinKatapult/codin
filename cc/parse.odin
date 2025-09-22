@@ -110,13 +110,13 @@ Operator :: enum {
 
 @(private="package")
 DataType :: struct {
+	subtypes:  [dynamic]DataType,
 	name:      string,
 	size:      int,
 	is_float:  bool,
 	unsigned:  bool,
 	is_struct: bool,
 	variadic:  bool,
-	subtypes:  [dynamic]DataType,
 }
 
 @(private="package")
@@ -846,24 +846,28 @@ resolve_assignment :: proc(root: ^AstNode, iter: ^TokenIter, parse_info: ^ParseI
 
 @(private="file")
 get_token_type_info :: proc(iter: ^TokenIter, parse_info: ^ParseInfo, type_info: ^DataType) -> bool {
-	unsigned := false
+	unsigned  := false
+	is_struct := false
 
 	if current_token(iter).type == .T_UNSIGNED {
 		unsigned = true
 		next_token(iter)
 	} else if current_token(iter).type == .T_SIGNED {
 		next_token(iter)
+	} else if current_token(iter).type == .T_STRUCT {
+		is_struct = true
 	}
 
-	if current_token(iter).type != .T_IDENTIFIER {
+	if current_token(iter).type != .T_IDENTIFIER && !is_struct {
 		return false
 	}
 
-	identifier := current_token(iter).value
+	identifier := is_struct ? look_ahead_token(iter).value : current_token(iter).value
 	for type in parse_info.types {
 		if identifier == type.name {
 			type_info^ = type
 			type_info.unsigned = unsigned
+			if is_struct do next_token(iter)
 			return true
 		}
 	}
@@ -881,6 +885,8 @@ resolve_variable_declaration :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -
 
 	if get_token_type_info(iter, parse_info, &statement_t.type) {
 		node.value = statement_t
+		log(.Debug, fmt.tprint(statement_t.type))
+
 		next_token(iter)
 		if statement_t.type.size <= 0 {
 			log_error_with_token(current_token(iter)^, "type is not valid type for variable declaration")
@@ -910,6 +916,7 @@ resolve_variable_declaration :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -
 
 		ok = true
 	}
+	log(.Debug, fmt.tprint(statement_t.type))
 
 	return node, ok
 }
