@@ -798,15 +798,11 @@ compile_asm :: proc(src_name: string) -> bool {
         log(.Proto, "Linking of executeable")
         p_desc = {
             command = { 
-                "ld", 
-                "-m", "elf_i386", 
+                "gcc", 
+                "-m32",
+                "-no-pie",
                 "-o", cc_flags.output_file, 
                 obj_file_name,
-                "-lc", 
-                "/usr/lib32/crt1.o", 
-                "/usr/lib32/crti.o", 
-                "/usr/lib32/crtn.o", 
-                "-dynamic-linker", "/lib/ld-linux.so.2"
             }
         }
         log(.Proto, fmt.tprint(p_desc.command))

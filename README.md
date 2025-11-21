@@ -3,11 +3,9 @@
 Unfinished C-Compiler written in Odin
 
 ## Dependencies
-- Odin 					(https://github.com/odin-lang/Odin)
-- Nasm					(https://github.com/netwide-assembler/nasm)
-- gcc-multilib			(apt: gcc-multilib)
-- ld					(coreutil)
-- Linux Dynamic Linker  (coreutil)
+- Odin (https://github.com/odin-lang/Odin)
+- Nasm (https://github.com/netwide-assembler/nasm)
+- gcc  (https://gcc.gnu.org/)
 
 ## Highest level code supported by compiler
 ```c
@@ -15,9 +13,9 @@ void printf(int str, ...);
 
 int main(void) {
 
-	printf("This is a cool number: %d%c", 420, '\n');
+    printf("This is a cool number: %d%c", 420, '\n');
 
-	return 0;
+    return 0;
 }
 ```
 
