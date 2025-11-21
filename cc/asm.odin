@@ -2,7 +2,6 @@ package cc
 
 import "core:strings"
 import "core:fmt"
-import "core:strconv"
 import "core:os/os2"
 
 @(private="file")
@@ -34,7 +33,6 @@ FunctionScope :: struct {
 
 Variable :: struct {
     type:       DataType,
-    subtypes:   [dynamic]DataType,
     ebp_offset: string,
 }
 
@@ -710,7 +708,6 @@ generate_asm_for_string_definition :: proc(str_b: ^strings.Builder, literal: str
             continue
         }
 
-        to_write: string
         if c == '\\' && i + 1 < len(literal) {
             next_char := literal[i+1]
             val, _ := get_terminated_char_value(next_char)
