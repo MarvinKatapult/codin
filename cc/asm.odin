@@ -514,6 +514,16 @@ size_keyword_for_type :: proc(type: DataType) -> string {
     return "";
 }
 
+handle_struct_declare :: proc(statement_node: ^AstNode, func_scope: ^FunctionScope) {
+    // log(.Debug, fmt.tprint("Statementnode", statement_node))
+    struct_identifier := statement_node.value.(AstStatement).identifier
+    log(.Debug, struct_identifier)
+    for child in statement_node.childs {
+        stmt_t := child.value.(AstStatement)
+        log(.Debug, fmt.tprint("Child: ", stmt_t.type.name, stmt_t.identifier))
+    }
+}
+
 @(private="file")
 generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^AstNode, 
                                    func_scope: ^FunctionScope, file_info: ^FileInfo) -> bool {
@@ -576,6 +586,7 @@ generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^Ast
             strings.write_string(str_b, func_scope.break_label)
             strings.write_string(str_b, "\t; Break\n\n")
         case .AST_STRUCT_DECLARE:
+            handle_struct_declare(statement_node, func_scope)
     }
 
     return true
