@@ -33,6 +33,8 @@ NodeType :: enum {
     AST_BREAK,
     AST_STRING_LITERAL,
     AST_STRUCT_DECLARE,
+    AST_STRUCT_REFERENCE,
+    AST_STRUCT_VAR,
 }
 
 @(private="package")
@@ -110,19 +112,20 @@ Operator :: enum {
 
 @(private="package")
 DataType :: struct {
-    subtypes:  [dynamic]DataType,
-    name:      string,
-    size:      int,
-    is_float:  bool,
-    unsigned:  bool,
-    is_struct: bool,
-    variadic:  bool,
+    subtypes:       [dynamic]DataType,
+    struct_offsets: [dynamic]int,
+    name:           string,
+    size:           int,
+    is_float:       bool,
+    unsigned:       bool,
+    is_struct:      bool,
+    variadic:       bool,
 }
 
 @(private="package")
 ParseInfo :: struct {
     functions:             [dynamic]AstFunction,
-    types:                 [dynamic]DataType,
+    types:                 map[string]DataType,
     program_node:          ^AstNode,
     global_count:          uint,
     break_possible:        bool,
@@ -369,6 +372,18 @@ resolve_expr_primary :: proc(iter: ^TokenIter, parse_info: ^ParseInfo, no_expr_p
             }
         } else {
             node.type = .AST_EXPR_VARIABLE
+            for look_ahead_token(iter).type == .T_DOT {
+                node.type = .AST_STRUCT_VAR
+                next_token(iter); next_token(iter)
+                log(.Debug, "DOT")
+                expression_t: AstExpression
+                expression_t.value = current_token(iter).value
+
+                reference := new(AstNode)
+                reference.type = .AST_STRUCT_REFERENCE
+                reference.value = expression_t
+                append_ast_node(node, reference)
+            }
         }
 
         next_token(iter)
@@ -877,15 +892,15 @@ get_token_type_info :: proc(iter: ^TokenIter, parse_info: ^ParseInfo, type_info:
     }
 
     identifier := is_struct ? look_ahead_token(iter).value : current_token(iter).value
-    for type in parse_info.types {
-        if identifier == type.name {
-            type_info^ = type
-            type_info.unsigned = unsigned
-            if is_struct do next_token(iter)
-            return true
-        }
-    }
-    return false
+
+    ok: bool
+    type_info^, ok = parse_info.types[identifier]
+    if !ok do return false
+
+    type_info^ = parse_info.types[identifier]
+    type_info.unsigned = unsigned
+    if is_struct do next_token(iter)
+    return true
 }
 
 @(private="file")
@@ -984,6 +999,8 @@ resolve_struct_declaration :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> 
         parse_info.no_declare_and_assign = false
 
         parsed_type := declaration.value.(AstStatement).type
+        new_type.size += new_type.size % parsed_type.size
+        append(&new_type.struct_offsets, new_type.size)
         new_type.size += parsed_type.size
         append(&new_type.subtypes, parsed_type)
 
@@ -997,7 +1014,7 @@ resolve_struct_declaration :: proc(iter: ^TokenIter, parse_info: ^ParseInfo) -> 
         next_token(iter)
     }
 
-    append(&parse_info.types, new_type)
+    parse_info.types[new_type.name] = new_type
 
     if len(node.childs) <= 0 {
         log_error_with_token(current_token(iter)^, "Struct declaration with no fields is not allowed")
@@ -1444,11 +1461,11 @@ resolve_scope :: proc(iter: ^TokenIter, parse_info: ^ParseInfo, allow_single_stm
 
 @(private="file")
 set_default_parse_info :: proc(parse_info: ^ParseInfo, root: ^AstNode) {
-    append(&parse_info.types, DataType{size = 0, name = "void",  is_struct = false, is_float = false})
-    append(&parse_info.types, DataType{size = 1, name = "char",  is_struct = false, is_float = false})
-    append(&parse_info.types, DataType{size = 2, name = "short", is_struct = false, is_float = false})
-    append(&parse_info.types, DataType{size = 4, name = "int",   is_struct = false, is_float = false})
-    append(&parse_info.types, DataType{size = 4, name = "long",  is_struct = false, is_float = false})
+    parse_info.types["void"]  = DataType{size = 0, name = "void",  is_struct = false, is_float = false}
+    parse_info.types["char"]  = DataType{size = 1, name = "char",  is_struct = false, is_float = false}
+    parse_info.types["short"] = DataType{size = 2, name = "short", is_struct = false, is_float = false}
+    parse_info.types["int"]   = DataType{size = 4, name = "int",   is_struct = false, is_float = false}
+    parse_info.types["long"]  = DataType{size = 4, name = "long",  is_struct = false, is_float = false}
 
     parse_info.program_node = root
 }

@@ -320,7 +320,7 @@ generate_asm_for_operator :: proc(str_b: ^strings.Builder, expression_node: ^Ast
             var_expr_t := expression_node.childs[0].value.(AstExpression)
             var := func_scope.variables[var_expr_t.value]
 
-            strings.write_string(str_b, fmt.tprintf("\tlea eax, %s\t; Load adress of variable\n", var.ebp_offset))
+            strings.write_string(str_b, fmt.tprintf("\tlea eax, [%s]\t; Load adress of variable\n", var.ebp_offset))
         case .OP_DEREFERENCE:
             if expression_node.childs[0].type != .AST_EXPR_VARIABLE {
                 log(.Error, "Adress Operator can only be used with a variable")
@@ -356,7 +356,7 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 
             var := func_scope.variables[expression_t.value]
             write_str := fmt.tprintf(
-                "\tmov %s, %s %s ; moving value of variable %s directly into eax\n\n",
+                "\tmov %s, %s [%s] ; moving value of variable %s directly into eax\n\n",
                 register_for_type(var.type), size_keyword_for_type(var.type), var.ebp_offset, expression_t.value
             )
 
@@ -454,6 +454,30 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
             }
 
             return true
+        case .AST_STRUCT_VAR:
+            d: Variable = func_scope.variables[expression_t.value]
+            log(.Debug, fmt.tprint(expression_t))
+            log(.Debug, fmt.tprint(d))
+            if expression_t.value not_in func_scope.variables {
+                log(.Error, "Variable ", expression_t.value, " not declared!")
+                return false
+            }
+
+            ebp_offset := func_scope.variables[expression_t.value].ebp_offset
+
+            for child in expression_node {
+                ref := child.value.(AstExpression).value
+                ebp_offset = fmt.tprint("%s-%d", ebp_offset, d.type)
+            }
+
+            var := func_scope.variables[expression_t.value]
+            write_str := fmt.tprintf(
+                "\tmov %s, %s [%s] ; moving value of variable %s directly into eax\n\n",
+                register_for_type(var.type), size_keyword_for_type(var.type), var.ebp_offset, expression_t.value
+            )
+
+            strings.write_string(str_b, write_str)
+            return true
     }
 
     log(.Error, "Expression must be constant or unary expression!")
@@ -467,7 +491,7 @@ generate_asm_for_var_declare :: proc(str_b: ^strings.Builder, statement_node: ^A
 
     statement_t := statement_node.value.(AstStatement)
     if statement_t.identifier in func_scope.variables {
-        log(.Error, "Variale redefinition!")
+        log(.Error, "Variable redefinition!")
         return false
     }
 
@@ -478,7 +502,7 @@ generate_asm_for_var_declare :: proc(str_b: ^strings.Builder, statement_node: ^A
     ebp_offset := func_scope.ebp_offset
     ebp_offset^ = ebp_offset^ - statement_t.type.size
 
-    variable := Variable{type = statement_t.type, ebp_offset = strings.clone(fmt.tprintf("[ebp%d]", ebp_offset^))}
+    variable := Variable{type = statement_t.type, ebp_offset = strings.clone(fmt.tprintf("ebp%d", ebp_offset^))}
     func_scope.variables[statement_t.identifier] = variable
 
     if len(statement_node.childs) > 0 {
@@ -512,16 +536,6 @@ size_keyword_for_type :: proc(type: DataType) -> string {
 
     assert(false)
     return "";
-}
-
-handle_struct_declare :: proc(statement_node: ^AstNode, func_scope: ^FunctionScope) {
-    // log(.Debug, fmt.tprint("Statementnode", statement_node))
-    struct_identifier := statement_node.value.(AstStatement).identifier
-    log(.Debug, struct_identifier)
-    for child in statement_node.childs {
-        stmt_t := child.value.(AstStatement)
-        log(.Debug, fmt.tprint("Child: ", stmt_t.type.name, stmt_t.identifier))
-    }
 }
 
 @(private="file")
@@ -558,7 +572,7 @@ generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^Ast
             mov_string: string
             if statement_node.type == .AST_VAR_DEREF_ASSIGNMENT {
                 strings.write_string(str_b, fmt.tprintf(
-                        "\tmov ebx, %s %s\t; Mov ptr value of %s into edi\n",
+                        "\tmov ebx, %s [%s]\t; Mov ptr value of %s into edi\n",
                         size_keyword_for_type(var.type), var.ebp_offset, statement_t.identifier
                     )
                 )
@@ -568,7 +582,7 @@ generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^Ast
                 )
             } else {
                 mov_string = fmt.tprintf(
-                    "\tmov %s %s, %s \t; mov calculated value into variable: %s\n\n",
+                    "\tmov %s [%s], %s \t; mov calculated value into variable: %s\n\n",
                     size_keyword_for_type(var.type), var.ebp_offset, register_for_type(var.type), statement_t.identifier
                 )
             }
@@ -586,7 +600,6 @@ generate_asm_for_statement :: proc(str_b: ^strings.Builder, statement_node: ^Ast
             strings.write_string(str_b, func_scope.break_label)
             strings.write_string(str_b, "\t; Break\n\n")
         case .AST_STRUCT_DECLARE:
-            handle_struct_declare(statement_node, func_scope)
     }
 
     return true
@@ -665,7 +678,7 @@ generate_asm_for_function :: proc(str_b: ^strings.Builder, function_node: ^AstNo
 
         statement_t := child.value.(AstStatement)
         parameter_ebp_offset += PTR_SIZE
-        variable := Variable{type = statement_t.type, ebp_offset = strings.clone(fmt.tprintf("[ebp+%d]", parameter_ebp_offset))}
+        variable := Variable{type = statement_t.type, ebp_offset = strings.clone(fmt.tprintf("ebp+%d", parameter_ebp_offset))}
         func_scope.variables[statement_t.identifier] = variable
     }
 
