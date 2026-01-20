@@ -465,7 +465,7 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
 
             ebp_offset := func_scope.variables[expression_t.value].ebp_offset
 
-            for child in expression_node {
+            for child in expression_node.childs {
                 ref := child.value.(AstExpression).value
                 ebp_offset = fmt.tprint("%s-%d", ebp_offset, d.type)
             }
@@ -848,7 +848,7 @@ compile_asm :: proc(src_name: string) -> bool {
     log(.Proto, "Compiling of file ", cc_flags.output_file, " was successful!")
 
     // r-xr-xr-x
-    if !cc_flags.is_object && os2.chmod(cc_flags.output_file, 0o755) != nil {
+    if !cc_flags.is_object && os2.chmod(cc_flags.output_file, {.Execute_Other, .Execute_Group, .Execute_User, .Read_User, .Read_Other, .Read_Group}) != nil {
         log(.Error, "File rights of ", cc_flags.output_file, " could not be set properly!")
         return false
     }
