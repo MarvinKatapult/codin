@@ -198,17 +198,8 @@ look_back_one :: proc(buf: string, index: int, c1: u8, c2: u8) -> bool {
 }
 
 @(private="package")
-lex :: proc(filename: string) -> [dynamic]Token {
+lex :: proc(source_file: string) -> [dynamic]Token {
     ret: [dynamic]Token
-
-    filedata, ok := os.read_entire_file(filename)
-    if !ok {
-        log(.Error, "Cant read file!")
-        return nil
-    }
-    defer delete(filedata)
-
-    file_str := string(filedata)
 
     str_b := strings.builder_make()
     defer strings.builder_destroy(&str_b)
@@ -219,7 +210,7 @@ lex :: proc(filename: string) -> [dynamic]Token {
     comment:             bool = false
     is_in_single_quotes: bool = false
     is_in_double_quotes: bool = false
-    for c, i in file_str {
+    for c, i in source_file {
         defer x += 1
 
         if is_in_single_quotes && c != '\'' {
@@ -251,22 +242,22 @@ lex :: proc(filename: string) -> [dynamic]Token {
             }
         }
 
-        last_token := i == len(file_str) - 1
+        last_token := i == len(source_file) - 1
         if last_token {
             strings.write_rune(&str_b, c)
         }
 
-        if look_ahead_one(file_str, i, '/', '/') {
+        if look_ahead_one(source_file, i, '/', '/') {
             in_line_comment = true
             continue
         }
 
-        if look_ahead_one(file_str, i, '/', '*') {
+        if look_ahead_one(source_file, i, '/', '*') {
             comment = true
             continue
         }
         
-        if look_back_one(file_str, i, '*', '/') {
+        if look_back_one(source_file, i, '*', '/') {
             comment = false
             continue
         }

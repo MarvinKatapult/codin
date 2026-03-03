@@ -1,5 +1,6 @@
 # Bugs
 - Function should have to have return statement
+- Program has to end with whitespace for lexer
 
 # 1
 - do-while-loop

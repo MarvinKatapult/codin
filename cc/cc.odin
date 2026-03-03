@@ -77,7 +77,17 @@ compile_file :: proc() -> bool {
 
     log(.Proto, "Compiling file: ", cc_flags.input_file)
     log(.Proto, "Lexing file: ", cc_flags.input_file)
-    tokens := lex(cc_flags.input_file)
+
+    filedata, ok := os.read_entire_file(cc_flags.input_file)
+    if !ok {
+        log(.Error, "Cant read file!")
+        return false
+    }
+    defer delete(filedata)
+
+    source_file := string(filedata)
+
+    tokens := lex(source_file)
     if tokens == nil {
         log(.Error, "Lexing was not successful")
         return false
@@ -88,7 +98,9 @@ compile_file :: proc() -> bool {
     }
 
     log(.Proto, "Building AST for file: ", cc_flags.input_file)
-    ok, ast, parse_info := build_ast(tokens[:])
+    ast: ^AstNode
+    parse_info: ^ParseInfo
+    ok, ast, parse_info = build_ast(tokens[:])
     log_ast(ast)
     if !ok {
         log(.Error, "Building AST was not successful")
