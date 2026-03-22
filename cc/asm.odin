@@ -2,7 +2,7 @@ package cc
 
 import "core:strings"
 import "core:fmt"
-import "core:os/os2"
+import "core:os"
 
 @(private="file")
 PTR_SIZE :: 4
@@ -789,11 +789,11 @@ generate_asm :: proc(ast: ^AstNode, parse_info: ^ParseInfo) -> string {
 @(private="package")
 compile_asm :: proc(src_name: string) -> bool {
     obj_file_name := cc_flags.is_object ? cc_flags.output_file : fmt.tprintf("output/%s.o", cc_flags.output_file)
-    p_desc: os2.Process_Desc = {
+    p_desc: os.Process_Desc = {
         command = {"nasm", src_name, "-f", "elf", "-o", obj_file_name},
     } 
     log(.Proto, fmt.tprintf("Command for Nasm:%s", fmt.tprint(p_desc.command)))
-    process_state, stdout, stderr, err := os2.process_exec(
+    process_state, stdout, stderr, err := os.process_exec(
         p_desc,
         context.temp_allocator
     )
@@ -827,7 +827,7 @@ compile_asm :: proc(src_name: string) -> bool {
             }
         }
         log(.Proto, fmt.tprint(p_desc.command))
-        process_state, stdout, stderr, err = os2.process_exec(
+        process_state, stdout, stderr, err = os.process_exec(
             p_desc,
             context.temp_allocator
         )
@@ -848,7 +848,7 @@ compile_asm :: proc(src_name: string) -> bool {
     log(.Proto, "Compiling of file ", cc_flags.output_file, " was successful!")
 
     // r-xr-xr-x
-    if !cc_flags.is_object && os2.chmod(cc_flags.output_file, {.Execute_Other, .Execute_Group, .Execute_User, .Read_User, .Read_Other, .Read_Group}) != nil {
+    if !cc_flags.is_object && os.chmod(cc_flags.output_file, {.Execute_Other, .Execute_Group, .Execute_User, .Read_User, .Read_Other, .Read_Group}) != nil {
         log(.Error, "File rights of ", cc_flags.output_file, " could not be set properly!")
         return false
     }

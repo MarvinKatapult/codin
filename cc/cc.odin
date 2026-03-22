@@ -78,9 +78,10 @@ compile_file :: proc() -> bool {
     log(.Proto, "Compiling file: ", cc_flags.input_file)
     log(.Proto, "Lexing file: ", cc_flags.input_file)
 
-    filedata, ok := os.read_entire_file(cc_flags.input_file)
-    if !ok {
+    filedata, err := os.read_entire_file(cc_flags.input_file, context.allocator)
+    if err != nil {
         log(.Error, "Cant read file!")
+        log(.Error, fmt.tprint(err))
         return false
     }
     defer delete(filedata)
@@ -100,6 +101,7 @@ compile_file :: proc() -> bool {
     log(.Proto, "Building AST for file: ", cc_flags.input_file)
     ast: ^AstNode
     parse_info: ^ParseInfo
+    ok: bool
     ok, ast, parse_info = build_ast(tokens[:])
     log_ast(ast)
     if !ok {
@@ -115,7 +117,7 @@ compile_file :: proc() -> bool {
 
     output_dir :: "./output"
     if !os.is_dir(output_dir) {
-        if os.make_directory(output_dir, 0o775) != nil {
+        if os.make_directory(output_dir) != nil {
             log(.Error, "Unable to create Output directory!")
             return false
         }
@@ -123,7 +125,7 @@ compile_file :: proc() -> bool {
 
     asm_file := fmt.tprintf("./output/out.s")
     log(.Proto, "Writing Assembly to ", asm_file, "!")
-    if !os.write_entire_file(asm_file, transmute([]u8)assembler) do return false
+    if os.write_entire_file(asm_file, transmute([]u8)assembler) != nil do return false
 
     log(.Proto, assembler, cc_prefix = false)
 
