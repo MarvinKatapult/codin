@@ -376,12 +376,12 @@ resolve_expr_primary :: proc(iter: ^TokenIter, parse_info: ^ParseInfo, no_expr_p
                 node.type = .AST_STRUCT_VAR
                 next_token(iter); next_token(iter)
                 log(.Debug, "DOT")
-                expression_t: AstExpression
-                expression_t.value = current_token(iter).value
+                subname_t: AstExpression
+                subname_t.value = current_token(iter).value
 
                 reference := new(AstNode)
                 reference.type = .AST_STRUCT_REFERENCE
-                reference.value = expression_t
+                reference.value = subname_t
                 append_ast_node(node, reference)
             }
         }

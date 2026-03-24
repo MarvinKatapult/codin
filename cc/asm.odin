@@ -466,6 +466,7 @@ generate_asm_for_expr :: proc(str_b: ^strings.Builder, expression_node: ^AstNode
             ebp_offset := func_scope.variables[expression_t.value].ebp_offset
 
             for child in expression_node.childs {
+                // TODO: ref not used?
                 ref := child.value.(AstExpression).value
                 ebp_offset = fmt.tprint("%s-%d", ebp_offset, d.type)
             }
@@ -787,7 +788,7 @@ generate_asm :: proc(ast: ^AstNode, parse_info: ^ParseInfo) -> string {
 }
 
 @(private="package")
-compile_asm :: proc(src_name: string) -> bool {
+compile_asm :: proc(src_name: string, cc_flags: ^CompileFlags) -> bool {
     obj_file_name := cc_flags.is_object ? cc_flags.output_file : fmt.tprintf("output/%s.o", cc_flags.output_file)
     p_desc: os.Process_Desc = {
         command = {"nasm", src_name, "-f", "elf", "-o", obj_file_name},

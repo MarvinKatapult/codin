@@ -1,6 +1,5 @@
 package cc
 
-import "core:os"
 import "core:strings"
 import "core:strconv"
 import "core:unicode/utf8"

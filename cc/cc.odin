@@ -3,17 +3,10 @@ package cc
 import "core:fmt"
 import "core:os"
 
-@(private)
 CompileFlags :: struct {
     is_object: bool,
     output_file: string,
     input_file: string,
-}
-@(private)
-cc_flags: CompileFlags = {
-    is_object = false,
-    output_file = "a.out",
-    input_file = "",
 }
 
 start_compiling :: proc() {
@@ -26,17 +19,23 @@ start_compiling :: proc() {
         return
     }
 
-    if !parse_args() {
+    cc_flags: CompileFlags = {
+        is_object = false,
+        output_file = "a.out",
+        input_file = "",
+    }
+
+    if !parse_args(&cc_flags) {
         os.exit(1)
     }
 
-    if !compile_file() {
+    if !compile_file(&cc_flags) {
         os.exit(1)
     }
 }
 
 @(private)
-parse_args :: proc() -> bool {
+parse_args :: proc(cc_flags: ^CompileFlags) -> bool {
     skip: bool
     for arg, i in os.args {
         if i == 0 do continue
@@ -71,7 +70,7 @@ parse_args :: proc() -> bool {
     return true
 }
 
-compile_file :: proc() -> bool {
+compile_file :: proc(cc_flags: ^CompileFlags) -> bool {
     context.allocator = context.temp_allocator
     defer free_all(context.allocator)
 
@@ -129,7 +128,7 @@ compile_file :: proc() -> bool {
 
     log(.Proto, assembler, cc_prefix = false)
 
-    if !compile_asm(asm_file) do return false
+    if !compile_asm(asm_file, cc_flags) do return false
 
     return true
 }
